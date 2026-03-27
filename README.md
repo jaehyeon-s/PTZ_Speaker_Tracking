@@ -1,109 +1,54 @@
-# PTZ Speaker Tracking System
+# ModelTest Branch
 
-**발화자 인식 기반 PTZ 카메라 자동 추적 시스템**
+YOLO26n 모델 추론 성능 측정 및 환경 설정 테스트 브랜치입니다.
 
-강의실, 회의실 등의 환경에서 발화자를 자동으로 인식하고  
-PTZ 카메라를 실시간으로 제어하는 엣지 디바이스 기반 시스템입니다.
+## 테스트 환경
 
----
+| 항목 | 사양 |
+|---|---|
+| 하드웨어 | NVIDIA Jetson Xavier AGX |
+| JetPack | 5.1.3 (R35.5.0) |
+| Python | 3.8 |
+| PyTorch | 2.1.0a0+41361538.nv23.6 |
+| Ultralytics | 8.4.26 |
+| 카메라 | 한화테크윈 QND-6011 |
+| 스트림 | RTSP / H.264 / 640×480 / 30fps |
 
-## 프로젝트 개요
+## 추론 성능 측정 결과
 
-| 항목 | 내용 |
-|------|------|
-| **기관** | (주)엠디케이 |
-| **인원** | 3명 |
-| **플랫폼** | Raspberry Pi 5 |
-| **카메라 제어** | Sony VISCA over IP |
+| 방식 | imgsz | 평균 FPS | 비고 |
+|---|---|---|---|
+| PyTorch CPU | 416 | 3.4 | ARM CPU, 최적화 없음 |
+| NCNN | 416 | 15.4 | ARM 최적화, 4.5배 향상 |
+| TensorRT GPU | 416 | 측정 예정 | Xavier Volta GPU |
 
----
-
-## 주요 기능
-
-- 실시간 발화자 인식 및 자동 추적
-- 다중 인물 환경에서의 발화자 판별
-- 사용자 지정 화면 구도 제어 (상반신/전신, 좌/중/우)
-- 타깃 분실 시 자동 복구
-- 웹 기반 대시보드 및 REST API
-- Docker 기반 배포
-
----
-
-## 기술 스택
-
-| 분류 | 기술 |
-|------|------|
-| AI 추론 | YOLO26n (NCNN) |
-| 트래킹 | ByteTrack |
-| 카메라 제어 | VISCA over IP |
-| API | FastAPI |
-| 배포 | Docker |
-| 언어 | Python 3.11+ |
-
----
-
-## 프로젝트 구조
-
-```
-PTZ_Speaker_Tracking/
-├── src/
-│   ├── common/          # 공통 모듈
-│   ├── vision/          # 비전 파이프라인
-│   ├── audio/           # 오디오 파이프라인
-│   ├── fusion/          # 센서 융합
-│   ├── ptz/             # PTZ 카메라 제어
-│   └── api/             # REST API 및 웹 대시보드
-├── tests/               # 테스트
-├── configs/             # 설정 파일
-├── scripts/             # 유틸리티 스크립트
-├── docs/                # 문서
-└── docker/              # Docker 관련
-```
-
----
-
-## 빠른 시작
-
-### 요구사항
-
-- Raspberry Pi 5 (8GB)
-- RTSP + VISCA over IP 지원 PTZ 카메라
-- USB 마이크 어레이
-- Python 3.11+
-
-### 설치 및 실행
-
+## 실행 방법
 ```bash
-git clone https://github.com/jaehyeon-s/PTZ_Speaker_Tracking.git
-cd PTZ_Speaker_Tracking
-pip install -r requirements.txt
+# 가상환경 설정 (JetPack 환경)
+python3.8 -m venv ~/.venv_jp5 --system-site-packages
+source ~/.venv_jp5/bin/activate
+pip install ultralytics opencv-python
 
-cp configs/default.yaml configs/local.yaml
-# local.yaml 수정 후 실행
-python main.py --config configs/local.yaml
+# NCNN 변환
+python export_ncnn.py
+
+# RTSP 스트림 추론 테스트
+python rtsp_test.py
 ```
 
----
+## 파일 구조
+```
+ModelTest/
+├── rtsp_test.py      # RTSP 스트림 + YOLO 추론 테스트
+├── export_ncnn.py    # NCNN 변환 스크립트
+├── export_RT.py      # TensorRT 변환 스크립트
+└── README.md
+``` 
 
-## 역할 분담
+## 주요 이슈 및 해결
 
-| 담당 | 영역 |
-|------|------|
-| 1번 | Vision & Audio |
-| 2번 | PTZ 제어 |
-| 3번 | 통합 / API / UI |
-
----
-
-## 참고 자료
-
-- YOLO26 (Ultralytics, 2026)
-- *Robust Localization of Multiple Speakers with SRP-PHAT*
-- *STNet: Speaker Tracking Network*
-- Sony VISCA Command List Version 2.00
-
----
-
-## License
-
-This project is developed as a graduation project.
+| 이슈 | 원인 | 해결 |
+|---|---|---|
+| CUDA False | PyTorch 버전 불일치 (cu130 vs JetPack cu114) | JetPack 전용 wheel 설치 |
+| ncnn import 오류 | 파일명이 라이브러리명과 충돌 | 파일명 변경 |
+| libopenblas 오류 | 시스템 라이브러리 누락 | apt install libopenblas-dev |
