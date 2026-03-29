@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 import time
 
-RTSP = "rtsp://admin:비밀번호@192.168.0.193:554/profile5/media.smp"
+RTSP = "rtsp://admin:비밀번호@ip주소/profile5/media.smp"
 model = YOLO("yolo26n.pt")  # CPU로 자동 동작
 
 cap = cv2.VideoCapture(RTSP, cv2.CAP_FFMPEG)
