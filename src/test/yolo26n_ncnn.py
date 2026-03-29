@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 import time
 
-RTSP = "rtsp://admin:비밀번호@192.168.0.193:554/profile5/media.smp"
+RTSP = "rtsp://admin:비밀번호@ip주소/profile5/media.smp"
 
 # NCNN 모델 로드
 model = YOLO("yolo26n_ncnn_model")
