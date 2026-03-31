@@ -32,7 +32,8 @@ pip install ultralytics opencv-python ncnn
 python export_ncnn.py
 
 # RTSP 스트림 추론 테스트
-python rtsp_test.py
+python yolo26n.py
+python yolo26n_ncnn.py
 ```
 
 ## 파일 구조
