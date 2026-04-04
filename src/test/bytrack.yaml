@@ -1,0 +1,6 @@
+tracker_type: bytetrack
+track_high_thresh: 0.5   # YOLO가 검출한 박스 중 신뢰도 0.5 이상인 박스만 1단계 매칭에 사용
+track_low_thresh: 0.1    # 2단계 매칭에서 사용할 저신뢰도 박스의 하한선
+new_track_thresh: 0.6    # 새로운 ID를 부여할 때 최소 신뢰도
+track_buffer: 60         # 트랙을 잃어버린 후 몇 프레임 동안 기다릴지
+match_thresh: 0.7        # 1단계 매칭에서 트랙과 박스가 얼마나 겹쳐야 같은 사람으로 볼지 / IoU(겹치는 면적 비율) 기준
