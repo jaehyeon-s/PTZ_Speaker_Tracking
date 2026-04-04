@@ -2,28 +2,77 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PTZ Speaker Tracking Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>PTZ Speaker Tracking Dashboard</h1>
-        <p>웹 UI 기본 화면입니다.</p>
 
-        <div class="panel">
-            <h2>시스템 상태</h2>
-            <p>카메라 연결 상태: 대기 중</p>
-            <p>세션 상태: IDLE</p>
-            <p>현재 타겟 ID: 없음</p>
-            <p>FPS: 0</p>
+    <!-- 헤더 -->
+    <header class="header">
+        <h1>PTZ Speaker Tracking Dashboard</h1>
+        <div class="status-bar">
+            <span class="badge green">Camera Connected</span>
+            <span class="badge green">RTSP Active</span>
+            <span class="badge yellow">Session IDLE</span>
+        </div>
+    </header>
+
+    <div class="main">
+
+        <!-- 왼쪽: 영상 영역 -->
+        <div class="video-section">
+            <div class="video-box">
+                <p>VIDEO STREAM</p>
+            </div>
         </div>
 
-        <div class="panel">
-            <h2>제어 버튼</h2>
-            <button>수업 시작</button>
-            <button>수업 종료</button>
-            <button>발표자 LOCK</button>
+        <!-- 오른쪽 -->
+        <div class="side-panel">
+
+            <!-- 상태 카드 -->
+            <div class="card">
+                <h2>System Status</h2>
+                <p>Detector: YOLO26n (NCNN)</p>
+                <p>Tracker: ByteTrack</p>
+                <p>FPS: 14.2</p>
+                <p>Target ID: None</p>
+                <p>Zone Lock: OFF</p>
+            </div>
+
+            <!-- 제어 패널 -->
+            <div class="card">
+                <h2>Control Panel</h2>
+
+                <button>Session Start</button>
+                <button>Session End</button>
+
+                <div class="ptz">
+                    <button>↑</button>
+                    <div>
+                        <button>←</button>
+                        <button>●</button>
+                        <button>→</button>
+                    </div>
+                    <button>↓</button>
+                </div>
+
+                <button>Zoom +</button>
+                <button>Zoom -</button>
+                <button>Lock</button>
+                <button>Unlock</button>
+                <button>Zone Lock</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 로그 -->
+    <div class="log-panel">
+        <h2>System Log</h2>
+        <div id="log-box">
+            <p>[INFO] RTSP stream connected</p>
+            <p>[INFO] YOLO26n NCNN initialized</p>
+            <p>[INFO] ByteTrack running</p>
         </div>
     </div>
 
