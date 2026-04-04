@@ -1,38 +1,97 @@
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background-color: #f4f6f8;
+    background-color: #0f172a;
+    color: white;
 }
 
-.container {
-    max-width: 900px;
-    margin: 40px auto;
+/* 헤더 */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 30px;
+    background: #1e293b;
+}
+
+.status-bar .badge {
+    padding: 6px 12px;
+    margin-left: 10px;
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.green { background: #22c55e; }
+.yellow { background: #facc15; }
+
+/* 메인 */
+.main {
+    display: flex;
     padding: 20px;
 }
 
-h1 {
-    color: #222;
+/* 영상 */
+.video-section {
+    flex: 2;
 }
 
-.panel {
-    background: white;
+.video-box {
+    height: 400px;
+    background: black;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 12px;
-    padding: 20px;
-    margin-top: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+/* 오른쪽 */
+.side-panel {
+    flex: 1;
+    margin-left: 20px;
+}
+
+/* 카드 */
+.card {
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+/* 버튼 */
 button {
-    margin-right: 10px;
-    margin-top: 10px;
-    padding: 10px 16px;
+    margin: 5px;
+    padding: 10px;
     border: none;
     border-radius: 8px;
-    background-color: #2d6cdf;
+    background: #3b82f6;
     color: white;
     cursor: pointer;
 }
 
 button:hover {
-    background-color: #1f4ea8;
+    background: #2563eb;
+}
+
+/* PTZ */
+.ptz {
+    text-align: center;
+    margin: 10px 0;
+}
+
+.ptz div {
+    display: flex;
+    justify-content: center;
+}
+
+/* 로그 */
+.log-panel {
+    background: #020617;
+    padding: 20px;
+    margin: 20px;
+    border-radius: 12px;
+}
+
+#log-box {
+    font-size: 14px;
 }
