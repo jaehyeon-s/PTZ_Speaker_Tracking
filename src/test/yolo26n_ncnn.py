@@ -25,6 +25,9 @@ while True:
     fps = 1 / (time.time() - start)
     fps_list.append(fps)
 
+    annotated = results[0].plot()
+    cv2.imshow("PI5 Test", annotated)
+
     if len(fps_list) % 30 == 0:
         print(f"평균 FPS (NCNN): {sum(fps_list[-30:])/30:.1f}")
 
@@ -32,3 +35,5 @@ while True:
         break
 
 cap.release()
+cv2.destroyAllWindows()
+print("전체 평균 FPS: {sum(fps_list)/len(fps_list):.1f}")
