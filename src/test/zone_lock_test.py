@@ -3,7 +3,7 @@ from zone_lock import ZoneLock
 import cv2
 import time
 
-RTSP = "rtsp://admin:비밀번호@192.168.0.193:554/profile5/media.smp"
+RTSP = "rtsp://admin:비밀번호@ip 주소/profile4/media.smp"
 model = YOLO("yolo26n_ncnn_model")
 zone = ZoneLock()
 
