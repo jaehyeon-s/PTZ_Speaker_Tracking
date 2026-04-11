@@ -2,78 +2,171 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PTZ Speaker Tracking Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <div class="app-shell">
 
-    <!-- 헤더 -->
-    <header class="header">
-        <h1>PTZ Speaker Tracking Dashboard</h1>
-        <div class="status-bar">
-            <span class="badge green">Camera Connected</span>
-            <span class="badge green">RTSP Active</span>
-            <span class="badge yellow">Session IDLE</span>
-        </div>
-    </header>
-
-    <div class="main">
-
-        <!-- 왼쪽: 영상 영역 -->
-        <div class="video-section">
-            <div class="video-box">
-                <p>VIDEO STREAM</p>
-            </div>
-        </div>
-
-        <!-- 오른쪽 -->
-        <div class="side-panel">
-
-            <!-- 상태 카드 -->
-            <div class="card">
-                <h2>System Status</h2>
-                <p>Detector: YOLO26n (NCNN)</p>
-                <p>Tracker: ByteTrack</p>
-                <p>FPS: 14.2</p>
-                <p>Target ID: None</p>
-                <p>Zone Lock: OFF</p>
+        <header class="top-header">
+            <div class="title-area">
+                <h1>PTZ Speaker Tracking Dashboard</h1>
+                <p>실시간 추적 · 프리셋 제어 · 상태 모니터링</p>
             </div>
 
-            <!-- 제어 패널 -->
-            <div class="card">
-               <h2>Control Panel</h2>
-
-               <button id="startBtn">Session Start</button>
-               <button id="endBtn">Session End</button>
-
-               <div class="ptz">
-                   <button id="upBtn">↑</button>
-                   <div>
-                        <button id="leftBtn">←</button>
-                        <button id="centerBtn">●</button>
-                        <button id="rightBtn">→</button>
-                   </div>
-                   <button id="downBtn">↓</button>
-               </div>
-
-               <button id="zoomInBtn">Zoom +</button>
-               <button id="zoomOutBtn">Zoom -</button>
-               <button id="lockBtn">Lock</button>
-               <button id="unlockBtn">Unlock</button>
-               <button id="zoneBtn">Zone Lock</button>
+            <div class="header-status">
+                <span class="badge success">Camera Connected</span>
+                <span class="badge success">RTSP Active</span>
+                <span class="badge warning">Session IDLE</span>
             </div>
+        </header>
 
-        </div>
-    </div>
+        <section class="mode-bar">
+            <button class="mode-btn active" id="modeProfessorBtn">교수 카메라</button>
+            <button class="mode-btn" id="modeTrackBtn">추적</button>
+            <button class="mode-btn" id="modeFixedBtn">고정</button>
+        </section>
 
-    <!-- 로그 -->
-    <div class="log-panel">
-        <h2>System Log</h2>
-        <div id="log-box">
-            <p>[INFO] RTSP stream connected</p>
-            <p>[INFO] YOLO26n NCNN initialized</p>
-            <p>[INFO] ByteTrack running</p>
-        </div>
+        <section class="sub-tab-bar">
+            <button class="sub-tab active">프리셋</button>
+            <button class="sub-tab">트래킹</button>
+            <button class="sub-tab">미디어</button>
+            <button class="sub-tab">전원</button>
+        </section>
+
+        <main class="dashboard-grid">
+
+            <section class="left-panel">
+                <div class="video-card">
+                    <div class="card-header">
+                        <h2>Live View</h2>
+                        <div class="video-meta">
+                            <span>640 × 480</span>
+                            <span>30 FPS</span>
+                            <span>RTSP</span>
+                        </div>
+                    </div>
+
+                    <div class="video-box">
+                        <div class="video-overlay">
+                            <span class="overlay-tag">TRACKING VIEW</span>
+                            <span class="overlay-tag">Zone Lock OFF</span>
+                        </div>
+                        <div class="video-placeholder">VIDEO STREAM</div>
+                    </div>
+                </div>
+
+                <div class="preset-card">
+                    <div class="card-header">
+                        <h2>프리셋 선택</h2>
+                        <span class="muted-text">현재 모드에 따라 저장된 위치를 호출합니다</span>
+                    </div>
+
+                    <div class="preset-grid">
+                        <button class="preset-btn primary">전체 적용</button>
+                        <button class="preset-btn active">프로젝트(좌)</button>
+                        <button class="preset-btn">프로젝트(중)</button>
+                        <button class="preset-btn">프로젝트(우)</button>
+
+                        <button class="preset-btn">PC</button>
+                        <button class="preset-btn">노트북</button>
+                        <button class="preset-btn">Rev1</button>
+                        <button class="preset-btn">Rev2</button>
+
+                        <button class="preset-btn">좌</button>
+                        <button class="preset-btn">중앙</button>
+                        <button class="preset-btn">우</button>
+                        <button class="preset-btn">와이드</button>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="right-panel">
+                <div class="status-card">
+                    <div class="card-header">
+                        <h2>System Status</h2>
+                    </div>
+
+                    <div class="status-grid">
+                        <div class="mini-status">
+                            <span class="label">Detector</span>
+                            <span class="value" id="detectorValue">YOLO26n (NCNN)</span>
+                        </div>
+                        <div class="mini-status">
+                            <span class="label">Tracker</span>
+                            <span class="value" id="trackerValue">ByteTrack</span>
+                        </div>
+                        <div class="mini-status">
+                            <span class="label">FPS</span>
+                            <span class="value" id="fpsValue">27.2</span>
+                        </div>
+                        <div class="mini-status">
+                            <span class="label">Target ID</span>
+                            <span class="value" id="targetIdValue">None</span>
+                        </div>
+                        <div class="mini-status">
+                            <span class="label">Zone Lock</span>
+                            <span class="value" id="zoneLockValue">OFF</span>
+                        </div>
+                        <div class="mini-status">
+                            <span class="label">PTZ</span>
+                            <span class="value" id="ptzValue">Ready</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-card">
+                    <div class="card-header">
+                        <h2>Camera Control</h2>
+                    </div>
+
+                    <div class="control-group">
+                        <p class="group-title">세션 제어</p>
+                        <div class="btn-row">
+                            <button id="startBtn">Session Start</button>
+                            <button id="endBtn">Session End</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <p class="group-title">PTZ 방향 제어</p>
+                        <div class="ptz-pad">
+                            <button id="upBtn">↑</button>
+                            <div class="ptz-middle">
+                                <button id="leftBtn">←</button>
+                                <button id="centerBtn">●</button>
+                                <button id="rightBtn">→</button>
+                            </div>
+                            <button id="downBtn">↓</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <p class="group-title">줌 / 타겟</p>
+                        <div class="btn-row multi">
+                            <button id="zoomInBtn">Zoom +</button>
+                            <button id="zoomOutBtn">Zoom -</button>
+                            <button id="lockBtn">Lock</button>
+                            <button id="unlockBtn">Unlock</button>
+                            <button id="zoneBtn">Zone Lock</button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <section class="log-card">
+            <div class="card-header">
+                <h2>System Log</h2>
+            </div>
+            <div id="log-box" class="log-box">
+                <p>[INFO] RTSP stream connected</p>
+                <p>[INFO] YOLO26n NCNN initialized</p>
+                <p>[INFO] ByteTrack + Zone Lock ready</p>
+            </div>
+        </section>
+
     </div>
 
     <script src="/static/js/app.js"></script>
