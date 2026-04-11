@@ -10,7 +10,6 @@
     --accent-2: #3f82ff;
     --success: #1fcb74;
     --warning: #f0c330;
-    --danger: #ff5a6a;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
     --radius: 18px;
 }
@@ -67,8 +66,14 @@ body {
     color: white;
 }
 
-.green { background: var(--success); }
-.yellow { background: var(--warning); color: #1f2430; }
+.green {
+    background: var(--success);
+}
+
+.yellow {
+    background: var(--warning);
+    color: #1f2430;
+}
 
 .main-content {
     display: grid;
@@ -184,9 +189,18 @@ body {
     margin-top: 12px;
 }
 
-.pos-left { grid-area: left; }
-.pos-center { grid-area: center; }
-.pos-right { grid-area: right; }
+.pos-left {
+    grid-area: left;
+}
+
+.pos-center {
+    grid-area: center;
+}
+
+.pos-right {
+    grid-area: right;
+}
+
 .pos-wide {
     grid-area: wide;
     min-height: 58px;
