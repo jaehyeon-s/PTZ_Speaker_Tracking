@@ -96,3 +96,31 @@ addLog("Dashboard UI initialized");
 
 // 1초마다 상태 갱신
 setInterval(fetchStatus, 1000);
+
+function drawMockBoxes() {
+    const canvas = document.getElementById("overlay");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 예시 데이터 (나중에 API로 교체)
+    const people = [
+        { x: 100, y: 80, w: 120, h: 180, inside: true, id: 1 },
+        { x: 300, y: 120, w: 120, h: 180, inside: false, id: 2 }
+    ];
+
+    people.forEach(p => {
+        ctx.strokeStyle = p.inside ? "lime" : "red";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(p.x, p.y, p.w, p.h);
+
+        ctx.fillStyle = p.inside ? "lime" : "red";
+        ctx.fillText(`ID: ${p.id}`, p.x, p.y - 5);
+    });
+}
+
+// 테스트용 반복 실행
+setInterval(drawMockBoxes, 1000);
