@@ -8,9 +8,7 @@ router = APIRouter()
 
 def build_mock_detections():
     t = time.time()
-
-    # 박스가 조금씩 좌우로 움직이게 해서 실시간처럼 보이게 구현
-    offset = int(30 * math.sin(t))
+    offset = int(35 * math.sin(t))
 
     detections = [
         {
@@ -20,22 +18,44 @@ def build_mock_detections():
             "w": 90,
             "h": 170,
             "inside": True,
-            "target": True
+            "target": True,
+            "confidence": 0.92
         },
         {
             "id": 2,
-            "x": 240 - offset,
-            "y": 95,
+            "x": 260 - offset,
+            "y": 105,
             "w": 95,
             "h": 160,
             "inside": False,
-            "target": False
+            "target": False,
+            "confidence": 0.81
+        },
+        {
+            "id": 4,
+            "x": 430,
+            "y": 95 + int(20 * math.cos(t)),
+            "w": 85,
+            "h": 150,
+            "inside": True,
+            "target": False,
+            "confidence": 0.76
         }
     ]
 
-    # target_id는 target=True인 객체 기준으로 반영
     target = next((d for d in detections if d["target"]), None)
     app_state["target_id"] = str(target["id"]) if target else "None"
+
+    inside_count = len([d for d in detections if d["inside"]])
+
+    app_state["debug"] = {
+        "total_detections": len(detections),
+        "inside_zone": inside_count,
+        "outside_zone": len(detections) - inside_count,
+        "track_stability": "GOOD",
+        "last_reid": "2.1 sec ago",
+        "id_switch_count": 0
+    }
 
     return detections
 
@@ -53,9 +73,5 @@ def get_detections():
 
 @router.post("/api/zone/toggle")
 def toggle_zone_lock():
-    if app_state["zone_lock"] == "ON":
-        app_state["zone_lock"] = "OFF"
-    else:
-        app_state["zone_lock"] = "ON"
-
+    app_state["zone_lock"] = "OFF" if app_state["zone_lock"] == "ON" else "ON"
     return {"status": app_state["zone_lock"]}
