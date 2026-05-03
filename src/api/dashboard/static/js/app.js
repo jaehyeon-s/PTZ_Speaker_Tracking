@@ -1,5 +1,7 @@
 console.log("Dashboard Loaded");
 
+let lastTargetId = null;
+
 function addLog(message) {
     const logBox = document.getElementById("log-box");
     const p = document.createElement("p");
@@ -13,6 +15,7 @@ async function callAPI(url, message) {
     try {
         const response = await fetch(url, { method: "POST" });
         const data = await response.json();
+
         addLog(`${message} 성공`);
         console.log(data);
 
@@ -37,9 +40,25 @@ async function fetchStatus() {
         document.getElementById("ptzValue").textContent = data.ptz_status;
         document.getElementById("sessionValue").textContent = data.session_state;
         document.getElementById("sessionBadge").textContent = `Session ${data.session_state}`;
+
+        if (data.debug) {
+            document.getElementById("debugTargetValue").textContent = data.target_id;
+            document.getElementById("totalDetectionsValue").textContent = data.debug.total_detections;
+            document.getElementById("insideZoneValue").textContent = data.debug.inside_zone;
+            document.getElementById("outsideZoneValue").textContent = data.debug.outside_zone;
+            document.getElementById("trackStabilityValue").textContent = data.debug.track_stability;
+            document.getElementById("lastReidValue").textContent = data.debug.last_reid;
+            document.getElementById("idSwitchValue").textContent = data.debug.id_switch_count;
+        }
+
+        if (lastTargetId !== null && lastTargetId !== data.target_id) {
+            addLog(`Target ID changed: ${lastTargetId} → ${data.target_id}`);
+        }
+
+        lastTargetId = data.target_id;
+
     } catch (error) {
         console.error("상태 조회 실패:", error);
-        addLog("상태 조회 실패");
     }
 }
 
@@ -52,12 +71,12 @@ function drawBoxes(people) {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Zone Lock 영역 표시
     ctx.strokeStyle = "rgba(0, 180, 255, 0.9)";
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 6]);
     ctx.strokeRect(60, 50, 420, 220);
     ctx.setLineDash([]);
+
     ctx.fillStyle = "rgba(0, 180, 255, 0.9)";
     ctx.font = "14px Arial";
     ctx.fillText("ZONE LOCK AREA", 70, 45);
@@ -69,7 +88,8 @@ function drawBoxes(people) {
 
         ctx.fillStyle = p.inside ? "lime" : "red";
         ctx.font = "14px Arial";
-        ctx.fillText(`ID: ${p.id}`, p.x, p.y - 8);
+        ctx.fillText(`ID: ${p.id}`, p.x, p.y - 22);
+        ctx.fillText(`Conf: ${p.confidence}`, p.x, p.y - 8);
 
         if (p.target) {
             ctx.fillStyle = "yellow";
@@ -83,25 +103,11 @@ async function fetchDetections() {
         const response = await fetch("/api/detections");
         const data = await response.json();
         drawBoxes(data);
-
-        const insideCount = data.filter((p) => p.inside).length;
-        addDetectionSummary(data.length, insideCount);
     } catch (error) {
         console.error("Detection fetch 실패", error);
     }
 }
 
-let lastSummary = "";
-
-function addDetectionSummary(total, inside) {
-    const summary = `탐지 인원 ${total}명 / Zone 내부 ${inside}명`;
-    if (summary !== lastSummary) {
-        addLog(summary);
-        lastSummary = summary;
-    }
-}
-
-// 일반 프리셋 버튼 active
 document.querySelectorAll(".preset-grid .preset-btn").forEach((button) => {
     button.addEventListener("click", () => {
         document.querySelectorAll(".preset-grid .preset-btn").forEach((btn) => btn.classList.remove("active"));
@@ -110,7 +116,6 @@ document.querySelectorAll(".preset-grid .preset-btn").forEach((button) => {
     });
 });
 
-// 위치 프리셋 버튼 active
 document.querySelectorAll(".position-btn").forEach((button) => {
     button.addEventListener("click", () => {
         document.querySelectorAll(".position-btn").forEach((btn) => btn.classList.remove("active"));
@@ -119,7 +124,6 @@ document.querySelectorAll(".position-btn").forEach((button) => {
     });
 });
 
-// 세션 제어
 document.getElementById("startBtn").onclick = () => {
     callAPI("/api/session/start", "Session Start");
 };
@@ -128,27 +132,25 @@ document.getElementById("endBtn").onclick = () => {
     callAPI("/api/session/end", "Session End");
 };
 
-// PTZ 관련
 document.getElementById("lockBtn").onclick = () => addLog("Target Lock 요청");
 document.getElementById("unlockBtn").onclick = () => addLog("Target Unlock 요청");
+
 document.getElementById("upBtn").onclick = () => addLog("PTZ Move Up");
 document.getElementById("downBtn").onclick = () => addLog("PTZ Move Down");
 document.getElementById("leftBtn").onclick = () => addLog("PTZ Move Left");
 document.getElementById("rightBtn").onclick = () => addLog("PTZ Move Right");
 document.getElementById("centerBtn").onclick = () => addLog("PTZ Home / Center");
+
 document.getElementById("zoomInBtn").onclick = () => addLog("Zoom In");
 document.getElementById("zoomOutBtn").onclick = () => addLog("Zoom Out");
 
-// Zone Lock 토글
 document.getElementById("zoneBtn").onclick = () => {
     callAPI("/api/zone/toggle", "Zone Lock Toggle");
 };
 
-// 초기 실행
 fetchStatus();
 fetchDetections();
-addLog("Dashboard UI initialized");
+addLog("Tracking Debug UI initialized");
 
-// 주기 갱신
 setInterval(fetchStatus, 1000);
 setInterval(fetchDetections, 1000);
