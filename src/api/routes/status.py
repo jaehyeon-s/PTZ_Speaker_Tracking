@@ -8,13 +8,13 @@ router = APIRouter()
 
 def build_mock_detections():
     t = time.time()
-    offset = int(35 * math.sin(t))
+    offset = int(70 * math.sin(t))
 
     detections = [
         {
             "id": 1,
-            "x": 90 + offset,
-            "y": 70,
+            "x": 210 + offset,
+            "y": 95,
             "w": 90,
             "h": 170,
             "inside": True,
@@ -23,28 +23,50 @@ def build_mock_detections():
         },
         {
             "id": 2,
-            "x": 260 - offset,
-            "y": 105,
+            "x": 420 - offset,
+            "y": 120,
             "w": 95,
             "h": 160,
             "inside": False,
             "target": False,
             "confidence": 0.81
-        },
-        {
-            "id": 4,
-            "x": 430,
-            "y": 95 + int(20 * math.cos(t)),
-            "w": 85,
-            "h": 150,
-            "inside": True,
-            "target": False,
-            "confidence": 0.76
         }
     ]
 
     target = next((d for d in detections if d["target"]), None)
-    app_state["target_id"] = str(target["id"]) if target else "None"
+
+    frame_w = 640
+    frame_h = 480
+    center_x = frame_w // 2
+    center_y = frame_h // 2
+
+    if target:
+        target_center_x = target["x"] + target["w"] // 2
+        target_center_y = target["y"] + target["h"] // 2
+
+        offset_x = target_center_x - center_x
+        offset_y = target_center_y - center_y
+
+        pan_direction = "HOLD"
+        tilt_direction = "HOLD"
+
+        if offset_x > 40:
+            pan_direction = "RIGHT"
+        elif offset_x < -40:
+            pan_direction = "LEFT"
+
+        if offset_y > 40:
+            tilt_direction = "DOWN"
+        elif offset_y < -40:
+            tilt_direction = "UP"
+
+        app_state["target_id"] = str(target["id"])
+    else:
+        offset_x = 0
+        offset_y = 0
+        pan_direction = "HOLD"
+        tilt_direction = "HOLD"
+        app_state["target_id"] = "None"
 
     inside_count = len([d for d in detections if d["inside"]])
 
@@ -55,6 +77,16 @@ def build_mock_detections():
         "track_stability": "GOOD",
         "last_reid": "2.1 sec ago",
         "id_switch_count": 0
+    }
+
+    app_state["ptz_simulator"] = {
+        "frame_center_x": center_x,
+        "frame_center_y": center_y,
+        "offset_x": offset_x,
+        "offset_y": offset_y,
+        "pan_direction": pan_direction,
+        "tilt_direction": tilt_direction,
+        "zoom_state": "HOLD"
     }
 
     return detections
