@@ -5,12 +5,21 @@ import time
 
 
 class ReIDManager:
-    def __init__(self, similarity_threshold=0.6):
+    def __init__(self, similarity_threshold=0.6, low_score_frames=10, reacquire_threshold=0.65):
         self.lecturer_features = None   # 등록된 교수님 특징
         self.session_state = "IDLE"     # IDLE/ACTIVE/SUSPENDED/ENDED
+        
         self.last_seen_time = None      # 마지막 감지 시각
         self.suspend_timeout = 15 * 60  # 15분 (SUSPENDED → ENDED)
+        
         self.threshold = similarity_threshold
+        self.reacquire_threshold = reacquire_threshold
+        self.low_score_count = 0 
+        self.low_score_frames = low_score_frames
+        
+        self.target_id = None           # 처음 등록했을 때의 ID
+        self.current_id = None          # 현재 따라가야 하는 ID
+        self.last_scores = {}
 
     # 특징 추출
     def extract_features(self, frame, xyxy):
@@ -38,8 +47,11 @@ class ReIDManager:
         hist_s = cv2.calcHist([hsv], [1], None, [32], [0, 256])
 
         # 정규화
-        hist_h = cv2.normalize(hist_h, hist_h).flatten()
-        hist_s = cv2.normalize(hist_s, hist_s).flatten()
+        hist_h = hist_h.flatten()
+        hist_h = hist_h / (hist_h.sum() + 1e-6)
+
+        hist_s = hist_s.flatten()
+        hist_s = hist_s / (hist_s.sum() + 1e-6)
 
         # 체형 비율
         bbox_w = x2 - x1
@@ -75,16 +87,22 @@ class ReIDManager:
         return float(np.clip(total, 0.0, 1.0))
 
     # 세션 관리
-    def start_session(self, frame, xyxy):
+    def start_session(self, frame, xyxy, track_id=None):
         """교수님 특징 저장 + ACTIVE 전환"""
         features = self.extract_features(frame, xyxy)
         if features is None:
             print("[Re-ID] 특징 추출 실패")
             return False
-
+            
         self.lecturer_features = features
         self.session_state = "ACTIVE"
         self.last_seen_time = time.time()
+        self.low_score_count = 0
+        
+        self.target_id = track_id   # 처음 등록했을 때의 ID
+        self.current_id = track_id  # 현재 따라가야 하는 ID
+        self.last_scores = {}
+        
         print("[Re-ID] 세션 시작 → ACTIVE")
         return True
 
@@ -93,62 +111,88 @@ class ReIDManager:
         self.lecturer_features = None
         self.session_state = "IDLE"
         self.last_seen_time = None
+        
+        self.low_score_count = 0
+        self.target_id = None
+        self.current_id = None
+        self.last_scores = {}
+        
         print("[Re-ID] 세션 종료 → IDLE, Re-ID 초기화 완료")
-
+            
     def update(self, detected_persons, frame):
         """
-        매 프레임 호출
-        detected_persons: [(track_id, xyxy), ...]
-        반환: 교수님으로 판단된 track_id (없으면 None)
+        반환: (lecturer_id, best_id, best_score)
         """
         # IDLE이면 추적 안 함
         if self.session_state == "IDLE":
-            return None
+            return None, None, 0.0
 
         # SUSPENDED 타임아웃 체크
-        if self.session_state == "SUSPENDED":
-            if time.time() - self.last_seen_time > self.suspend_timeout:
-                self.end_session()
-                print("[Re-ID] 15분 초과 → ENDED → IDLE")
-                return None
+        if (
+            self.session_state == "SUSPENDED"
+            and self.last_seen_time is not None
+            and time.time() - self.last_seen_time > self.suspend_timeout
+        ):
+            self.end_session()
+            return None, None, 0.0
 
         # 감지된 인물 없음
         if not detected_persons:
-            if self.session_state == "ACTIVE":
+            self.low_score_count += 1
+
+            if (
+                self.session_state == "ACTIVE"
+                and self.low_score_count >= self.low_score_frames
+            ):
                 self.session_state = "SUSPENDED"
                 self.last_seen_time = time.time()
-                print("[Re-ID] 교수님 미감지 → SUSPENDED")
-            return None
 
-        # Re-ID 매칭
+            self.current_id = None
+            self.last_scores = {}
+            return None, None, 0.0
+
+        # 매칭
         best_id = None
         best_score = 0.0
+        self.last_scores = {}
 
         for track_id, xyxy in detected_persons:
             feat = self.extract_features(frame, xyxy)
             score = self.compare_features(self.lecturer_features, feat)
 
-            print(f"  ID:{track_id} 유사도: {score:.3f}", end="")
+            self.last_scores[track_id] = score
+
             if score > best_score:
                 best_score = score
                 best_id = track_id
-            print()
 
-        if best_score >= self.threshold:
-            # 매칭 성공
-            if self.session_state == "SUSPENDED":
-                print(f"[Re-ID] 재식별 성공 (유사도:{best_score:.2f}) → ACTIVE")
+        required_score = (
+            self.reacquire_threshold
+            if self.session_state == "SUSPENDED"
+            else self.threshold
+        )
+
+        # 매칭 성공
+        if best_score >= required_score:
+            self.low_score_count = 0
             self.session_state = "ACTIVE"
             self.last_seen_time = time.time()
-            return best_id
-        else:
-            # 매칭 실패
-            if self.session_state == "ACTIVE":
-                self.session_state = "SUSPENDED"
-                self.last_seen_time = time.time()
-                print(f"[Re-ID] 매칭 실패 (최고:{best_score:.2f}) → SUSPENDED")
-            return None
+            self.current_id = best_id
+            return best_id, best_id, best_score
 
+        # 매칭 실패
+        self.low_score_count += 1
+
+        if (
+            self.session_state == "ACTIVE"
+            and self.low_score_count >= self.low_score_frames
+        ):
+            self.session_state = "SUSPENDED"
+            self.last_seen_time = time.time()
+            self.current_id = None
+
+        return None, best_id, best_score
+				
     def get_state_info(self):
         return {
             "state": self.session_state,
