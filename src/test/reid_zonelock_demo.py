@@ -1,4 +1,4 @@
-# reid_bytetrack_demo.py
+# reid_zonelock_demo.py
 from ultralytics import YOLO
 from zone_lock import ZoneLock
 from reid_manager import ReIDManager
