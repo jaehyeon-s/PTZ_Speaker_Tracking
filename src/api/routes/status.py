@@ -10,6 +10,27 @@ def build_mock_detections():
     t = time.time()
     offset = int(70 * math.sin(t))
 
+    # 시간에 따라 Re-ID 상태가 바뀌는 테스트용 시나리오
+    phase = int(t) % 18
+
+    if phase < 7:
+        reid_state = "ACTIVE"
+        reid_score = 0.81
+        reid_event = "TARGET_MATCHED"
+        recovery_mode = "OFF"
+    elif phase < 13:
+        reid_state = "ACTIVE"
+        reid_score = 0.74
+        reid_event = "TARGET_SCORE_FLUCTUATION"
+        recovery_mode = "OFF"
+    else:
+        reid_state = "SUSPENDED"
+        reid_score = 0.59
+        reid_event = "WRONG_TARGET_SUSPECTED"
+        recovery_mode = "ON"
+
+    threshold = 0.70
+
     detections = [
         {
             "id": 1,
@@ -19,7 +40,9 @@ def build_mock_detections():
             "h": 170,
             "inside": True,
             "target": True,
-            "confidence": 0.92
+            "confidence": 0.92,
+            "reid_score": reid_score,
+            "reid_state": reid_state
         },
         {
             "id": 2,
@@ -29,7 +52,9 @@ def build_mock_detections():
             "h": 160,
             "inside": False,
             "target": False,
-            "confidence": 0.81
+            "confidence": 0.81,
+            "reid_score": 0.69,
+            "reid_state": "CANDIDATE"
         }
     ]
 
@@ -74,7 +99,7 @@ def build_mock_detections():
         "total_detections": len(detections),
         "inside_zone": inside_count,
         "outside_zone": len(detections) - inside_count,
-        "track_stability": "GOOD",
+        "track_stability": "GOOD" if reid_state == "ACTIVE" else "WARNING",
         "last_reid": "2.1 sec ago",
         "id_switch_count": 0
     }
@@ -87,6 +112,16 @@ def build_mock_detections():
         "pan_direction": pan_direction,
         "tilt_direction": tilt_direction,
         "zoom_state": "HOLD"
+    }
+
+    app_state["reid"] = {
+        "state": reid_state,
+        "score": reid_score,
+        "threshold": threshold,
+        "event": reid_event,
+        "method": "Color Histogram",
+        "registered_target": "Professor",
+        "recovery_mode": recovery_mode
     }
 
     return detections
