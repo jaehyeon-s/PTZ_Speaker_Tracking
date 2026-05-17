@@ -83,6 +83,4 @@ class ZoneLock:
         cv2.rectangle(overlay, (x1,y1), (x2,y2), (0,255,0), -1)
         frame = cv2.addWeighted(overlay, 0.1, frame, 0.9, 0)
         cv2.rectangle(frame, (x1,y1), (x2,y2), (0,255,0), 2)
-        cv2.putText(frame, "Lecture Zone", (x1+5, y1+25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
         return frame
