@@ -1,6 +1,8 @@
 console.log("Dashboard Loaded");
 
 let lastTargetId = null;
+let lastReidEvent = null;
+let lastReidState = null;
 
 function addLog(message) {
     const logBox = document.getElementById("log-box");
@@ -49,6 +51,31 @@ async function fetchStatus() {
             document.getElementById("trackStabilityValue").textContent = data.debug.track_stability;
             document.getElementById("lastReidValue").textContent = data.debug.last_reid;
             document.getElementById("idSwitchValue").textContent = data.debug.id_switch_count;
+        }
+
+        if (data.reid) {
+            document.getElementById("reidStateValue").textContent = data.reid.state;
+            document.getElementById("reidScoreValue").textContent = data.reid.score;
+            document.getElementById("reidThresholdValue").textContent = data.reid.threshold;
+            document.getElementById("reidEventValue").textContent = data.reid.event;
+            document.getElementById("reidMethodValue").textContent = data.reid.method;
+            document.getElementById("registeredTargetValue").textContent = data.reid.registered_target;
+            document.getElementById("recoveryModeValue").textContent = data.reid.recovery_mode;
+
+            if (lastReidEvent !== null && lastReidEvent !== data.reid.event) {
+                if (data.reid.event === "WRONG_TARGET_SUSPECTED") {
+                    addLog(`Re-ID WARNING: ${data.reid.event}, score=${data.reid.score}`);
+                } else {
+                    addLog(`Re-ID Event: ${data.reid.event}, score=${data.reid.score}`);
+                }
+            }
+
+            if (lastReidState !== null && lastReidState !== data.reid.state) {
+                addLog(`Re-ID State changed: ${lastReidState} → ${data.reid.state}`);
+            }
+
+            lastReidEvent = data.reid.event;
+            lastReidState = data.reid.state;
         }
 
         if (data.ptz_simulator) {
@@ -116,31 +143,40 @@ function drawBoxes(people) {
         const w = p.w * scaleX;
         const h = p.h * scaleY;
 
-        ctx.strokeStyle = p.inside ? "lime" : "red";
+        let boxColor = p.inside ? "lime" : "red";
+
+        if (p.reid_state === "SUSPENDED") {
+            boxColor = "orange";
+        }
+
+        ctx.strokeStyle = boxColor;
         ctx.lineWidth = p.target ? 5 : 3;
         ctx.strokeRect(x, y, w, h);
 
-        ctx.fillStyle = p.inside ? "lime" : "red";
+        ctx.fillStyle = boxColor;
         ctx.font = "14px Arial";
-        ctx.fillText(`ID: ${p.id}`, x, y - 22);
-        ctx.fillText(`Conf: ${p.confidence}`, x, y - 8);
+        ctx.fillText(`ID: ${p.id}`, x, y - 36);
+        ctx.fillText(`Conf: ${p.confidence}`, x, y - 22);
+
+        if (p.reid_score !== undefined) {
+            ctx.fillText(`Re-ID: ${p.reid_score}`, x, y - 8);
+        }
 
         if (p.target) {
             const targetCenterX = x + w / 2;
             const targetCenterY = y + h / 2;
 
-            ctx.fillStyle = "yellow";
-            ctx.fillText("TARGET", x, y + h + 18);
+            ctx.fillStyle = p.reid_state === "SUSPENDED" ? "orange" : "yellow";
+            ctx.fillText(p.reid_state === "SUSPENDED" ? "SUSPENDED" : "TARGET", x, y + h + 18);
 
             // 중심에서 타겟까지 방향선
-            ctx.strokeStyle = "yellow";
+            ctx.strokeStyle = p.reid_state === "SUSPENDED" ? "orange" : "yellow";
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(centerX, centerY);
             ctx.lineTo(targetCenterX, targetCenterY);
             ctx.stroke();
 
-            // 방향 텍스트
             const dx = targetCenterX - centerX;
             const dy = targetCenterY - centerY;
 
@@ -152,7 +188,7 @@ function drawBoxes(people) {
                 directionText = `${vertical} ${horizontal}`.trim();
             }
 
-            ctx.fillStyle = "yellow";
+            ctx.fillStyle = p.reid_state === "SUSPENDED" ? "orange" : "yellow";
             ctx.font = "16px Arial";
             ctx.fillText(`PTZ MOVE: ${directionText}`, 20, canvas.height - 20);
         }
@@ -211,7 +247,7 @@ document.getElementById("zoneBtn").onclick = () => {
 
 fetchStatus();
 fetchDetections();
-addLog("Virtual PTZ Simulator UI initialized");
+addLog("Re-ID Monitor UI initialized");
 
 setInterval(fetchStatus, 1000);
 setInterval(fetchDetections, 1000);
