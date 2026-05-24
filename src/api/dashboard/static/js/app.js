@@ -3,6 +3,8 @@ console.log("Dashboard Loaded");
 let lastTargetId = null;
 let lastReidEvent = null;
 let lastReidState = null;
+let reidTimeline = [];
+let scoreTrend = [];
 
 function addLog(message) {
     const logBox = document.getElementById("log-box");
@@ -11,6 +13,52 @@ function addLog(message) {
     p.textContent = `[${time}] ${message}`;
     logBox.appendChild(p);
     logBox.scrollTop = logBox.scrollHeight;
+}
+
+function getEventClass(level) {
+    if (level === "WARNING") return "timeline-warning";
+    if (level === "SUCCESS") return "timeline-success";
+    return "timeline-info";
+}
+
+function addReidTimelineEvent(state, event, score, level) {
+    const now = new Date().toLocaleTimeString();
+
+    const timelineItem = {
+        time: now,
+        state: state,
+        event: event,
+        score: score,
+        level: level,
+    };
+
+    reidTimeline.unshift(timelineItem);
+
+    if (reidTimeline.length > 6) {
+        reidTimeline.pop();
+    }
+
+    renderReidTimeline();
+}
+
+function renderReidTimeline() {
+    const box = document.getElementById("reidTimelineBox");
+    box.innerHTML = "";
+
+    reidTimeline.forEach((item) => {
+        const p = document.createElement("p");
+        p.className = `timeline-item ${getEventClass(item.level)}`;
+        p.textContent = `[${item.time}] ${item.state} / ${item.event} / score=${item.score}`;
+        box.appendChild(p);
+    });
+}
+
+function updateScoreTrend(score) {
+    scoreTrend.push(score);
+
+    if (scoreTrend.length > 6) {
+        scoreTrend.shift();
+    }
 }
 
 async function callAPI(url, message) {
@@ -62,7 +110,16 @@ async function fetchStatus() {
             document.getElementById("registeredTargetValue").textContent = data.reid.registered_target;
             document.getElementById("recoveryModeValue").textContent = data.reid.recovery_mode;
 
+            updateScoreTrend(data.reid.score);
+
             if (lastReidEvent !== null && lastReidEvent !== data.reid.event) {
+                addReidTimelineEvent(
+                    data.reid.state,
+                    data.reid.event,
+                    data.reid.score,
+                    data.reid.event_level
+                );
+
                 if (data.reid.event === "WRONG_TARGET_SUSPECTED") {
                     addLog(`Re-ID WARNING: ${data.reid.event}, score=${data.reid.score}`);
                 } else {
@@ -109,7 +166,6 @@ function drawBoxes(people) {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
 
-    // 카메라 중심 십자선
     ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -123,7 +179,6 @@ function drawBoxes(people) {
     ctx.font = "14px Arial";
     ctx.fillText("CAMERA CENTER", centerX + 10, centerY - 10);
 
-    // Zone Lock 영역
     ctx.strokeStyle = "rgba(0, 180, 255, 0.9)";
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 6]);
@@ -149,6 +204,10 @@ function drawBoxes(people) {
             boxColor = "orange";
         }
 
+        if (p.reid_state === "RECOVERED") {
+            boxColor = "cyan";
+        }
+
         ctx.strokeStyle = boxColor;
         ctx.lineWidth = p.target ? 5 : 3;
         ctx.strokeRect(x, y, w, h);
@@ -166,11 +225,18 @@ function drawBoxes(people) {
             const targetCenterX = x + w / 2;
             const targetCenterY = y + h / 2;
 
-            ctx.fillStyle = p.reid_state === "SUSPENDED" ? "orange" : "yellow";
-            ctx.fillText(p.reid_state === "SUSPENDED" ? "SUSPENDED" : "TARGET", x, y + h + 18);
+            if (p.reid_state === "SUSPENDED") {
+                ctx.fillStyle = "orange";
+                ctx.fillText("SUSPENDED", x, y + h + 18);
+            } else if (p.reid_state === "RECOVERED") {
+                ctx.fillStyle = "cyan";
+                ctx.fillText("RECOVERED", x, y + h + 18);
+            } else {
+                ctx.fillStyle = "yellow";
+                ctx.fillText("TARGET", x, y + h + 18);
+            }
 
-            // 중심에서 타겟까지 방향선
-            ctx.strokeStyle = p.reid_state === "SUSPENDED" ? "orange" : "yellow";
+            ctx.strokeStyle = ctx.fillStyle;
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(centerX, centerY);
@@ -188,7 +254,7 @@ function drawBoxes(people) {
                 directionText = `${vertical} ${horizontal}`.trim();
             }
 
-            ctx.fillStyle = p.reid_state === "SUSPENDED" ? "orange" : "yellow";
+            ctx.fillStyle = p.reid_state === "SUSPENDED" ? "orange" : p.reid_state === "RECOVERED" ? "cyan" : "yellow";
             ctx.font = "16px Arial";
             ctx.fillText(`PTZ MOVE: ${directionText}`, 20, canvas.height - 20);
         }
@@ -247,7 +313,7 @@ document.getElementById("zoneBtn").onclick = () => {
 
 fetchStatus();
 fetchDetections();
-addLog("Re-ID Monitor UI initialized");
+addLog("Re-ID Timeline UI initialized");
 
 setInterval(fetchStatus, 1000);
 setInterval(fetchDetections, 1000);
