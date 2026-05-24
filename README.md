@@ -21,7 +21,7 @@ python3 main_marker_tracking_demo.py --source rtsp://user:pass@camera/stream
 
 ## ArUco Marker
 
-Generate a printable marker:
+출력해서 사용할 수 있는 마커 이미지를 생성하는 방법입니다.
 
 ```bash
 python3 tools/generate_aruco_marker.py --id 7 --size 800 --output marker_7.png
