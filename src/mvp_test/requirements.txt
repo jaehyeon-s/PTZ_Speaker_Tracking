@@ -1,0 +1,4 @@
+numpy<2
+opencv-contrib-python<4.12
+# Optional, only needed for gesture fallback:
+mediapipe==0.10.21
