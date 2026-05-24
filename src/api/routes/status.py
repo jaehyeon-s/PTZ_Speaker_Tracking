@@ -6,30 +6,48 @@ import math
 router = APIRouter()
 
 
+def get_reid_scenario():
+    t = time.time()
+    phase = int(t) % 24
+
+    if phase < 6:
+        return {
+            "state": "ACTIVE",
+            "score": 0.81,
+            "event": "TARGET_MATCHED",
+            "recovery_mode": "OFF",
+            "event_level": "INFO",
+        }
+    elif phase < 12:
+        return {
+            "state": "ACTIVE",
+            "score": 0.74,
+            "event": "TARGET_SCORE_FLUCTUATION",
+            "recovery_mode": "OFF",
+            "event_level": "INFO",
+        }
+    elif phase < 18:
+        return {
+            "state": "SUSPENDED",
+            "score": 0.59,
+            "event": "WRONG_TARGET_SUSPECTED",
+            "recovery_mode": "ON",
+            "event_level": "WARNING",
+        }
+    else:
+        return {
+            "state": "RECOVERED",
+            "score": 0.78,
+            "event": "TARGET_RECOVERED",
+            "recovery_mode": "OFF",
+            "event_level": "SUCCESS",
+        }
+
+
 def build_mock_detections():
     t = time.time()
     offset = int(70 * math.sin(t))
-
-    # 시간에 따라 Re-ID 상태가 바뀌는 테스트용 시나리오
-    phase = int(t) % 18
-
-    if phase < 7:
-        reid_state = "ACTIVE"
-        reid_score = 0.81
-        reid_event = "TARGET_MATCHED"
-        recovery_mode = "OFF"
-    elif phase < 13:
-        reid_state = "ACTIVE"
-        reid_score = 0.74
-        reid_event = "TARGET_SCORE_FLUCTUATION"
-        recovery_mode = "OFF"
-    else:
-        reid_state = "SUSPENDED"
-        reid_score = 0.59
-        reid_event = "WRONG_TARGET_SUSPECTED"
-        recovery_mode = "ON"
-
-    threshold = 0.70
+    reid = get_reid_scenario()
 
     detections = [
         {
@@ -41,8 +59,8 @@ def build_mock_detections():
             "inside": True,
             "target": True,
             "confidence": 0.92,
-            "reid_score": reid_score,
-            "reid_state": reid_state
+            "reid_score": reid["score"],
+            "reid_state": reid["state"],
         },
         {
             "id": 2,
@@ -54,8 +72,8 @@ def build_mock_detections():
             "target": False,
             "confidence": 0.81,
             "reid_score": 0.69,
-            "reid_state": "CANDIDATE"
-        }
+            "reid_state": "CANDIDATE",
+        },
     ]
 
     target = next((d for d in detections if d["target"]), None)
@@ -68,7 +86,6 @@ def build_mock_detections():
     if target:
         target_center_x = target["x"] + target["w"] // 2
         target_center_y = target["y"] + target["h"] // 2
-
         offset_x = target_center_x - center_x
         offset_y = target_center_y - center_y
 
@@ -99,9 +116,9 @@ def build_mock_detections():
         "total_detections": len(detections),
         "inside_zone": inside_count,
         "outside_zone": len(detections) - inside_count,
-        "track_stability": "GOOD" if reid_state == "ACTIVE" else "WARNING",
+        "track_stability": "GOOD" if reid["state"] in ["ACTIVE", "RECOVERED"] else "WARNING",
         "last_reid": "2.1 sec ago",
-        "id_switch_count": 0
+        "id_switch_count": 0 if reid["state"] != "SUSPENDED" else 1,
     }
 
     app_state["ptz_simulator"] = {
@@ -111,17 +128,18 @@ def build_mock_detections():
         "offset_y": offset_y,
         "pan_direction": pan_direction,
         "tilt_direction": tilt_direction,
-        "zoom_state": "HOLD"
+        "zoom_state": "HOLD",
     }
 
     app_state["reid"] = {
-        "state": reid_state,
-        "score": reid_score,
-        "threshold": threshold,
-        "event": reid_event,
+        "state": reid["state"],
+        "score": reid["score"],
+        "threshold": 0.70,
+        "event": reid["event"],
+        "event_level": reid["event_level"],
         "method": "Color Histogram",
         "registered_target": "Professor",
-        "recovery_mode": recovery_mode
+        "recovery_mode": reid["recovery_mode"],
     }
 
     return detections
