@@ -1,57 +1,108 @@
-# ModelTest Branch
+# PTZ Marker Tracking MVP
 
-YOLO26n 모델 추론 성능 측정 및 환경 설정 테스트 브랜치입니다.
+This is a graduation-project MVP for marker-selected PTZ auto-tracking. It reads
+frames from a webcam, RTSP stream, or video file; detects people and ArUco
+markers; selects the person whose bbox contains the marker center; and sends
+coarse PTZ simulator commands from the selected person's bbox center.
 
-## 테스트 환경
+## Run
 
-| 항목 | 사양 |
-|---|---|
-| 하드웨어1 | NVIDIA Jetson Xavier AGX |
-| 하드웨어2 | Raspberry Pi 5 16GB |
-| JetPack | 5.1.3 (R35.5.0) |
-| Python | 3.8 |
-| PyTorch | 2.1.0a0+41361538.nv23.6 |
-| Ultralytics | 8.4.26 |
-| 카메라 | 한화테크윈 QND-6011 |
-| 스트림 | RTSP / H.264 / 640×480 / 30fps |
-
-## 추론 성능 측정 결과
-
-| 방식 | imgsz | 평균 FPS | 비고 |
-|---|---|---|---|
-| Xaiver CPU | 416 | 3.4 | ARM CPU, 최적화 없음 |
-| Xaiver NCNN | 416 | 15.4 | ARM 최적화 |
-| Xaiver NCNN + ByteTrack | 416 | 14.3 | - |
-| PI5 CPU | 416 | 7.6 | ARM CPU, 최적화 없음 |
-| PI5 NCNN | 416 | 27.2 | ARM 최적화 |
-| PI5 NCNN + ByteTrack | 416 | 27.2 | - |
-
-## 실행 방법
 ```bash
-# 가상환경 설정 (JetPack 환경)
-python3.8 -m venv ~/.venv --system-site-packages
-source ~/.venv/bin/activate
-pip install ultralytics opencv-python ncnn
-
-# NCNN 변환
-python export_ncnn.py
-
-# RTSP 스트림 추론 테스트
-python yolo26n.py
-python yolo26n_ncnn.py
+pip install -r requirements.txt
+python3 main_marker_tracking_demo.py --source 0
+python3 main_marker_tracking_demo.py --source path/to/video.mp4
+python3 main_marker_tracking_demo.py --source rtsp://user:pass@camera/stream
 ```
 
-## 파일 구조
+Use `--no-window` for headless simulator output, `--gesture` to enable optional
+gesture fallback, and `--target-marker-id 7` to acquire only one known marker id.
+Other marker ids are still drawn in the debug view, but they are ignored for
+target registration.
+
+For deterministic smoke tests or controlled demo footage, use
+`--detector manual --person-box x,y,w,h` to provide a known person bbox.
+
+## ArUco Marker
+
+Generate a printable marker:
+
+```bash
+python3 tools/generate_aruco_marker.py --id 7 --size 800 --output marker_7.png
 ```
-ModelTest/
-├── rtsp_test.py      # RTSP 스트림 + YOLO 추론 테스트
-├── export_ncnn.py    # NCNN 변환 스크립트
-└── README.md
-``` 
 
-## 주요 이슈 및 해결
+The generator uses `DICT_4X4_50` by default. Print the marker with a clear white
+border, keep it flat, and attach it to the target person's chest where it stays
+visible to the camera. For a stable presentation demo, run with the matching id:
 
-| 이슈 | 원인 | 해결 |
-|---|---|---|
-| ncnn import 오류 | 파일명이 라이브러리명과 충돌 | 파일명 변경 |
-| libopenblas 오류 | 시스템 라이브러리 누락 | apt install libopenblas-dev |
+```bash
+python3 main_marker_tracking_demo.py --source 0 --target-marker-id 7
+```
+
+## Detector Backends
+
+Choose a detector explicitly with `--detector {hog,opencv-yolo,ncnn,manual}`.
+`hog` is only a fallback when no project detector is available.
+
+OpenCV DNN/ONNX warning: `YoloOpenCVPersonDetector` is a temporary demo adapter.
+YOLO ONNX output layouts differ by exporter and model version, so its parser must
+be checked against the exact model before relying on it.
+
+Raspberry Pi 5 NCNN example:
+
+```bash
+python3 main_marker_tracking_demo.py \
+  --source 0 \
+  --detector ncnn \
+  --ncnn-param models/yolo.param \
+  --ncnn-bin models/yolo.bin \
+  --ncnn-input-size 640 \
+  --conf-threshold 0.35 \
+  --nms-threshold 0.45 \
+  --target-marker-id 7
+```
+
+If the existing project already has NCNN YOLO decode/NMS logic, reuse it by
+passing that parser into `NCNNPersonDetector(output_parser=...)`. The built-in
+generic NCNN parser is intentionally conservative and expects rows like
+`[x1, y1, x2, y2, score, class_id]`; model-specific heads should be decoded by
+the project adapter.
+
+## Existing Detector Adapter
+
+Keep the existing YOLO/ByteTrack detector unchanged and wrap its output:
+
+```python
+from person_detector import DetectionResultAdapter, ExistingProjectPersonDetectorAdapter
+
+person_detector = ExistingProjectPersonDetectorAdapter(existing_detector, bbox_format="xyxy")
+people = person_detector.detect(frame)
+```
+
+The adapter accepts ByteTrack-style `tlwh`, YOLO-style `xyxy`, dict/object
+outputs, and simple rows like `[x1, y1, x2, y2, score, class_id]`. It returns the
+demo's `PersonDetection(bbox=(x, y, w, h), confidence=score)` objects.
+
+## Keyboard Controls
+
+- `q`: quit
+- `r`: reset target
+- `s`: stop tracking
+- `m`: toggle marker-only mode
+- `g`: enable/disable gesture fallback
+
+## MVP Behavior
+
+- The active target is acquired only when an ArUco marker center is inside a
+  person bbox.
+- PTZ movement uses the selected person bbox center, not the marker center.
+- A dead zone around frame center prevents small jitter commands.
+- When the marker briefly disappears, the fallback bbox tracker keeps the same
+  target if the person remains near the previous bbox. If no match is found, the
+  state becomes `SUSPENDED` before resetting after `--max-suspended-frames`.
+- Gesture fallback is only used when no marker target is active. If MediaPipe is
+  installed and exactly one detected person has a raised wrist above shoulder
+  level for one second, that person is registered as a temporary target.
+
+Real hardware integration belongs in `HardwarePTZController` in
+`ptz_controller.py`; the current implementation intentionally prints simulator
+commands for a reliable demo without a PTZ camera.
