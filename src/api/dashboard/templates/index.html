@@ -71,7 +71,7 @@
                     <p>[INFO] RTSP stream connected</p>
                     <p>[INFO] YOLO26n NCNN initialized</p>
                     <p>[INFO] ByteTrack + Zone Lock ready</p>
-                    <p>[INFO] Re-ID monitor ready</p>
+                    <p>[INFO] Re-ID timeline ready</p>
                 </div>
             </div>
         </div>
@@ -108,6 +108,13 @@
                 <p>Method: <span id="reidMethodValue">-</span></p>
                 <p>Registered Target: <span id="registeredTargetValue">-</span></p>
                 <p>Recovery Mode: <span id="recoveryModeValue">-</span></p>
+            </div>
+
+            <div class="status-card">
+                <h2>Re-ID Timeline</h2>
+                <div id="reidTimelineBox" class="timeline-box">
+                    <p class="timeline-empty">No Re-ID events yet</p>
+                </div>
             </div>
 
             <div class="status-card">
