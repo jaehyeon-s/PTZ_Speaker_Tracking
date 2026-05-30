@@ -11,37 +11,35 @@ def get_reid_scenario():
     phase = int(t) % 24
 
     if phase < 6:
-        return {
-            "state": "ACTIVE",
-            "score": 0.81,
-            "event": "TARGET_MATCHED",
-            "recovery_mode": "OFF",
-            "event_level": "INFO",
-        }
+        return {"state": "ACTIVE", "score": 0.81, "event": "TARGET_MATCHED", "recovery_mode": "OFF", "event_level": "INFO"}
     elif phase < 12:
-        return {
-            "state": "ACTIVE",
-            "score": 0.74,
-            "event": "TARGET_SCORE_FLUCTUATION",
-            "recovery_mode": "OFF",
-            "event_level": "INFO",
-        }
+        return {"state": "ACTIVE", "score": 0.74, "event": "TARGET_SCORE_FLUCTUATION", "recovery_mode": "OFF", "event_level": "INFO"}
     elif phase < 18:
-        return {
-            "state": "SUSPENDED",
-            "score": 0.59,
-            "event": "WRONG_TARGET_SUSPECTED",
-            "recovery_mode": "ON",
-            "event_level": "WARNING",
-        }
+        return {"state": "SUSPENDED", "score": 0.59, "event": "WRONG_TARGET_SUSPECTED", "recovery_mode": "ON", "event_level": "WARNING"}
     else:
-        return {
-            "state": "RECOVERED",
-            "score": 0.78,
-            "event": "TARGET_RECOVERED",
-            "recovery_mode": "OFF",
-            "event_level": "SUCCESS",
-        }
+        return {"state": "RECOVERED", "score": 0.78, "event": "TARGET_RECOVERED", "recovery_mode": "OFF", "event_level": "SUCCESS"}
+
+
+def calc_health_score(reid_state, reid_score, track_stability, pan_direction, tilt_direction):
+    score = 100
+
+    if reid_state == "SUSPENDED":
+        score -= 30
+    elif reid_state == "RECOVERED":
+        score -= 8
+
+    if reid_score < 0.70:
+        score -= 20
+    elif reid_score < 0.78:
+        score -= 8
+
+    if track_stability == "WARNING":
+        score -= 15
+
+    if pan_direction != "HOLD" or tilt_direction != "HOLD":
+        score -= 5
+
+    return max(score, 0)
 
 
 def build_mock_detections():
@@ -86,6 +84,7 @@ def build_mock_detections():
     if target:
         target_center_x = target["x"] + target["w"] // 2
         target_center_y = target["y"] + target["h"] // 2
+
         offset_x = target_center_x - center_x
         offset_y = target_center_y - center_y
 
@@ -111,12 +110,29 @@ def build_mock_detections():
         app_state["target_id"] = "None"
 
     inside_count = len([d for d in detections if d["inside"]])
+    track_stability = "GOOD" if reid["state"] in ["ACTIVE", "RECOVERED"] else "WARNING"
+    health_score = calc_health_score(
+        reid["state"],
+        reid["score"],
+        track_stability,
+        pan_direction,
+        tilt_direction
+    )
+
+    if health_score >= 85:
+        health_level = "GOOD"
+    elif health_score >= 65:
+        health_level = "CAUTION"
+    else:
+        health_level = "WARNING"
+
+    warning_count = 1 if reid["state"] == "SUSPENDED" else 0
 
     app_state["debug"] = {
         "total_detections": len(detections),
         "inside_zone": inside_count,
         "outside_zone": len(detections) - inside_count,
-        "track_stability": "GOOD" if reid["state"] in ["ACTIVE", "RECOVERED"] else "WARNING",
+        "track_stability": track_stability,
         "last_reid": "2.1 sec ago",
         "id_switch_count": 0 if reid["state"] != "SUSPENDED" else 1,
     }
@@ -140,6 +156,15 @@ def build_mock_detections():
         "method": "Color Histogram",
         "registered_target": "Professor",
         "recovery_mode": reid["recovery_mode"],
+    }
+
+    app_state["health"] = {
+        "score": health_score,
+        "level": health_level,
+        "tracking": track_stability,
+        "reid": reid["state"],
+        "ptz": "TRACKING" if pan_direction != "HOLD" or tilt_direction != "HOLD" else "HOLD",
+        "warnings": warning_count,
     }
 
     return detections
