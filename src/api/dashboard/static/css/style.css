@@ -371,3 +371,48 @@ button:hover {
     background: rgba(0, 255, 180, 0.15);
     border-left: 4px solid cyan;
 }
+
+.health-card {
+    border: 1px solid rgba(47, 111, 255, 0.35);
+}
+
+.health-score-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 10px 0 16px;
+}
+
+.health-score {
+    font-size: 2.4rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.health-total {
+    color: var(--text-sub);
+    font-size: 1rem;
+}
+
+.health-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.health-good {
+    background: rgba(31, 203, 116, 0.2);
+    color: #1fcb74;
+}
+
+.health-caution {
+    background: rgba(240, 195, 48, 0.2);
+    color: #f0c330;
+}
+
+.health-warning {
+    background: rgba(255, 90, 106, 0.2);
+    color: #ff5a6a;
+}
