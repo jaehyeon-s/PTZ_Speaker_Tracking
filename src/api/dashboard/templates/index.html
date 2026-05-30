@@ -46,7 +46,6 @@
                     <button class="preset-btn">프로젝트(좌)</button>
                     <button class="preset-btn active">프로젝트(중)</button>
                     <button class="preset-btn">프로젝트(우)</button>
-
                     <button class="preset-btn">PC</button>
                     <button class="preset-btn">노트북</button>
                     <button class="preset-btn">Rev1</button>
@@ -71,12 +70,26 @@
                     <p>[INFO] RTSP stream connected</p>
                     <p>[INFO] YOLO26n NCNN initialized</p>
                     <p>[INFO] ByteTrack + Zone Lock ready</p>
-                    <p>[INFO] Re-ID timeline ready</p>
+                    <p>[INFO] System Health Dashboard ready</p>
                 </div>
             </div>
         </div>
 
         <aside class="right-panel">
+
+            <div class="status-card health-card">
+                <h2>System Health</h2>
+                <div class="health-score-wrap">
+                    <span id="healthScoreValue" class="health-score">-</span>
+                    <span class="health-total">/ 100</span>
+                </div>
+                <p>Level: <span id="healthLevelValue" class="health-badge">-</span></p>
+                <p>Tracking: <span id="healthTrackingValue">-</span></p>
+                <p>Re-ID: <span id="healthReidValue">-</span></p>
+                <p>PTZ: <span id="healthPtzValue">-</span></p>
+                <p>Warnings: <span id="healthWarningsValue">-</span></p>
+            </div>
+
             <div class="status-card">
                 <h2>System Status</h2>
                 <p>Detector: <span id="detectorValue">-</span></p>
@@ -141,11 +154,9 @@
                         <div></div>
                         <button id="upBtn" class="ptz-dir">↑</button>
                         <div></div>
-
                         <button id="leftBtn" class="ptz-dir">←</button>
                         <button id="centerBtn" class="ptz-dir center-btn">HOME</button>
                         <button id="rightBtn" class="ptz-dir">→</button>
-
                         <div></div>
                         <button id="downBtn" class="ptz-dir">↓</button>
                         <div></div>
