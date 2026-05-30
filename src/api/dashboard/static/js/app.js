@@ -3,8 +3,8 @@ console.log("Dashboard Loaded");
 let lastTargetId = null;
 let lastReidEvent = null;
 let lastReidState = null;
+let lastHealthLevel = null;
 let reidTimeline = [];
-let scoreTrend = [];
 
 function addLog(message) {
     const logBox = document.getElementById("log-box");
@@ -23,16 +23,7 @@ function getEventClass(level) {
 
 function addReidTimelineEvent(state, event, score, level) {
     const now = new Date().toLocaleTimeString();
-
-    const timelineItem = {
-        time: now,
-        state: state,
-        event: event,
-        score: score,
-        level: level,
-    };
-
-    reidTimeline.unshift(timelineItem);
+    reidTimeline.unshift({ time: now, state, event, score, level });
 
     if (reidTimeline.length > 6) {
         reidTimeline.pop();
@@ -53,11 +44,17 @@ function renderReidTimeline() {
     });
 }
 
-function updateScoreTrend(score) {
-    scoreTrend.push(score);
+function setHealthLevelStyle(level) {
+    const badge = document.getElementById("healthLevelValue");
+    badge.textContent = level;
+    badge.classList.remove("health-good", "health-caution", "health-warning");
 
-    if (scoreTrend.length > 6) {
-        scoreTrend.shift();
+    if (level === "GOOD") {
+        badge.classList.add("health-good");
+    } else if (level === "CAUTION") {
+        badge.classList.add("health-caution");
+    } else {
+        badge.classList.add("health-warning");
     }
 }
 
@@ -91,6 +88,21 @@ async function fetchStatus() {
         document.getElementById("sessionValue").textContent = data.session_state;
         document.getElementById("sessionBadge").textContent = `Session ${data.session_state}`;
 
+        if (data.health) {
+            document.getElementById("healthScoreValue").textContent = data.health.score;
+            setHealthLevelStyle(data.health.level);
+            document.getElementById("healthTrackingValue").textContent = data.health.tracking;
+            document.getElementById("healthReidValue").textContent = data.health.reid;
+            document.getElementById("healthPtzValue").textContent = data.health.ptz;
+            document.getElementById("healthWarningsValue").textContent = data.health.warnings;
+
+            if (lastHealthLevel !== null && lastHealthLevel !== data.health.level) {
+                addLog(`System Health changed: ${lastHealthLevel} → ${data.health.level}`);
+            }
+
+            lastHealthLevel = data.health.level;
+        }
+
         if (data.debug) {
             document.getElementById("debugTargetValue").textContent = data.target_id;
             document.getElementById("totalDetectionsValue").textContent = data.debug.total_detections;
@@ -110,15 +122,8 @@ async function fetchStatus() {
             document.getElementById("registeredTargetValue").textContent = data.reid.registered_target;
             document.getElementById("recoveryModeValue").textContent = data.reid.recovery_mode;
 
-            updateScoreTrend(data.reid.score);
-
             if (lastReidEvent !== null && lastReidEvent !== data.reid.event) {
-                addReidTimelineEvent(
-                    data.reid.state,
-                    data.reid.event,
-                    data.reid.score,
-                    data.reid.event_level
-                );
+                addReidTimelineEvent(data.reid.state, data.reid.event, data.reid.score, data.reid.event_level);
 
                 if (data.reid.event === "WRONG_TARGET_SUSPECTED") {
                     addLog(`Re-ID WARNING: ${data.reid.event}, score=${data.reid.score}`);
@@ -200,13 +205,8 @@ function drawBoxes(people) {
 
         let boxColor = p.inside ? "lime" : "red";
 
-        if (p.reid_state === "SUSPENDED") {
-            boxColor = "orange";
-        }
-
-        if (p.reid_state === "RECOVERED") {
-            boxColor = "cyan";
-        }
+        if (p.reid_state === "SUSPENDED") boxColor = "orange";
+        if (p.reid_state === "RECOVERED") boxColor = "cyan";
 
         ctx.strokeStyle = boxColor;
         ctx.lineWidth = p.target ? 5 : 3;
@@ -287,33 +287,24 @@ document.querySelectorAll(".position-btn").forEach((button) => {
     });
 });
 
-document.getElementById("startBtn").onclick = () => {
-    callAPI("/api/session/start", "Session Start");
-};
-
-document.getElementById("endBtn").onclick = () => {
-    callAPI("/api/session/end", "Session End");
-};
+document.getElementById("startBtn").onclick = () => callAPI("/api/session/start", "Session Start");
+document.getElementById("endBtn").onclick = () => callAPI("/api/session/end", "Session End");
 
 document.getElementById("lockBtn").onclick = () => addLog("Target Lock 요청");
 document.getElementById("unlockBtn").onclick = () => addLog("Target Unlock 요청");
-
 document.getElementById("upBtn").onclick = () => addLog("PTZ Move Up");
 document.getElementById("downBtn").onclick = () => addLog("PTZ Move Down");
 document.getElementById("leftBtn").onclick = () => addLog("PTZ Move Left");
 document.getElementById("rightBtn").onclick = () => addLog("PTZ Move Right");
 document.getElementById("centerBtn").onclick = () => addLog("PTZ Home / Center");
-
 document.getElementById("zoomInBtn").onclick = () => addLog("Zoom In");
 document.getElementById("zoomOutBtn").onclick = () => addLog("Zoom Out");
 
-document.getElementById("zoneBtn").onclick = () => {
-    callAPI("/api/zone/toggle", "Zone Lock Toggle");
-};
+document.getElementById("zoneBtn").onclick = () => callAPI("/api/zone/toggle", "Zone Lock Toggle");
 
 fetchStatus();
 fetchDetections();
-addLog("Re-ID Timeline UI initialized");
+addLog("System Health Dashboard initialized");
 
 setInterval(fetchStatus, 1000);
 setInterval(fetchDetections, 1000);
