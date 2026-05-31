@@ -10,6 +10,11 @@ from src.camera.region_provider import CenterCropRegionProvider, JsonlRegionProv
 from src.recovery.candidate_detector import YoloRecoveryDetector
 from src.reid.appearance import AppearanceReIdentifier
 from src.reid.verifier import PresenterVerifier, VerifierConfig
+from src.tracking.gesture_detector import GestureFallbackDetector
+from src.tracking.marker_detector import ArucoMarkerDetector
+from src.tracking.person_detector import build_person_detector
+from src.tracking.target_selector import point_in_bbox
+from src.tracking.target_state import PersonDetection
 from src.vision.capture import VideoSource
 from src.vision.models import BBox, TrackingState, VerificationResult
 
@@ -19,6 +24,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", required=True, help="Validation video or externally supplied camera RTSP URL")
     parser.add_argument("--region-mode", choices=("center", "jsonl"), default="center")
     parser.add_argument("--bbox-jsonl", default=None, help="Captured internal bbox samples for region-mode=jsonl")
+    parser.add_argument(
+        "--registration-mode",
+        choices=("observed", "marker", "gesture", "marker-or-gesture"),
+        default="observed",
+        help="How to register the presenter's Re-ID reference",
+    )
+    parser.add_argument("--target-marker-id", type=int, default=None, help="Only accept this ArUco marker id")
+    parser.add_argument(
+        "--detector",
+        choices=("hog", "opencv-yolo", "ncnn", "manual"),
+        default="hog",
+        help="Person detector used for marker/gesture registration",
+    )
+    parser.add_argument("--yolo-model", default=None, help="Optional YOLO ONNX model path")
+    parser.add_argument("--ncnn-param", default=None, help="NCNN .param path")
+    parser.add_argument("--ncnn-bin", default=None, help="NCNN .bin path")
+    parser.add_argument("--ncnn-input-size", type=int, default=640)
+    parser.add_argument("--person-box", default=None, help="Manual detector bbox x,y,w,h")
+    parser.add_argument("--conf-threshold", type=float, default=0.35)
+    parser.add_argument("--nms-threshold", type=float, default=0.45)
+    parser.add_argument("--debug-detector", action="store_true")
     parser.add_argument("--center-width-ratio", type=float, default=0.42)
     parser.add_argument("--center-height-ratio", type=float, default=0.86)
     parser.add_argument("--register-on-start", action="store_true", help="Register the first observed region as presenter")
@@ -54,6 +80,13 @@ def main() -> int:
         return 1
 
     provider = build_region_provider(args)
+    registration_detector = build_registration_detector(args)
+    marker_detector = ArucoMarkerDetector() if args.registration_mode in ("marker", "marker-or-gesture") else None
+    gesture_detector = (
+        GestureFallbackDetector()
+        if args.registration_mode in ("gesture", "marker-or-gesture")
+        else None
+    )
     verifier = PresenterVerifier(
         AppearanceReIdentifier(args.reid_threshold),
         VerifierConfig(max(1, args.mismatch_limit)),
@@ -89,15 +122,32 @@ def main() -> int:
             bbox, region_source = provider.region_for_frame(frame_index, frame)
             registered_this_frame = False
 
-            if frame_index == 1 and args.register_on_start:
-                selected_bbox = registration_bbox or bbox
-                if selected_bbox is None or not verifier.register(frame, selected_bbox):
-                    print("Could not register presenter from the initial frame.")
-                    return 1
-                last_result = VerificationResult(
-                    TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", region_source
+            people = []
+            markers = []
+            if registration_detector is not None and (args.register_on_start or not args.no_window):
+                people = registration_detector.detect(frame)
+            if marker_detector is not None and (args.register_on_start or not args.no_window):
+                markers = marker_detector.detect(frame)
+
+            if args.register_on_start and not verifier.registered:
+                selected_bbox = registration_bbox or select_registration_bbox(
+                    args,
+                    frame,
+                    bbox,
+                    people,
+                    markers,
+                    marker_detector,
+                    gesture_detector,
                 )
-                registered_this_frame = True
+                if selected_bbox is None or not verifier.register(frame, selected_bbox):
+                    if args.no_window:
+                        print("Could not register presenter from the available frame.")
+                        return 1
+                else:
+                    last_result = VerificationResult(
+                        TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
+                    )
+                    registered_this_frame = True
 
             should_verify = frame_index == 1 or frame_index % max(1, args.verify_every_frames) == 0
             if verifier.registered and should_verify and not registered_this_frame:
@@ -139,9 +189,20 @@ def main() -> int:
                 if key == ord("q"):
                     break
                 if key == ord("r") and bbox is not None:
-                    verifier.register(frame, registration_bbox or bbox)
+                    selected_bbox = registration_bbox or select_registration_bbox(
+                        args,
+                        frame,
+                        bbox,
+                        people,
+                        markers,
+                        marker_detector,
+                        gesture_detector,
+                    )
+                    if selected_bbox is None:
+                        continue
+                    verifier.register(frame, selected_bbox)
                     last_result = VerificationResult(
-                        TrackingState.VERIFIED, registration_bbox or bbox, 1.0, "PRESENTER_REGISTERED", region_source
+                        TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
     finally:
         video.release()
@@ -160,12 +221,93 @@ def build_region_provider(args):
     return CenterCropRegionProvider(args.center_width_ratio, args.center_height_ratio)
 
 
+def build_registration_detector(args):
+    if args.registration_mode == "observed":
+        return None
+    return build_person_detector(
+        detector_mode=resolve_detector_mode(args),
+        yolo_model=args.yolo_model,
+        manual_bbox=parse_xywh(args.person_box),
+        ncnn_param=args.ncnn_param,
+        ncnn_bin=args.ncnn_bin,
+        ncnn_input_size=args.ncnn_input_size,
+        conf_threshold=args.conf_threshold,
+        nms_threshold=args.nms_threshold,
+        debug_detector=args.debug_detector,
+    )
+
+
+def resolve_detector_mode(args) -> str:
+    if args.detector == "hog" and args.person_box is not None:
+        return "manual"
+    if args.detector == "hog" and args.yolo_model is not None:
+        return "opencv-yolo"
+    return args.detector
+
+
+def select_registration_bbox(
+    args,
+    frame,
+    observed_bbox: BBox | None,
+    people: list[PersonDetection],
+    markers,
+    marker_detector,
+    gesture_detector,
+) -> BBox | None:
+    del marker_detector
+    if args.registration_mode == "observed":
+        return observed_bbox
+    if args.registration_mode in ("marker", "marker-or-gesture"):
+        marker_bbox = select_marker_person_bbox(people, markers, args.target_marker_id)
+        if marker_bbox is not None:
+            return marker_bbox
+    if args.registration_mode in ("gesture", "marker-or-gesture") and gesture_detector is not None:
+        raised = gesture_detector.detect_raised_hand_indices(frame, people)
+        person = gesture_detector.update(people, raised)
+        if person is not None:
+            return xywh_to_xyxy(person.bbox)
+    return None
+
+
+def select_marker_person_bbox(people: list[PersonDetection], markers, target_marker_id: int | None) -> BBox | None:
+    best = None
+    for marker in markers:
+        if target_marker_id is not None and marker.marker_id != target_marker_id:
+            continue
+        for person in people:
+            if point_in_bbox(marker.center, person.bbox):
+                px, py = person.center
+                mx, my = marker.center
+                score = (px - mx) ** 2 + (py - my) ** 2
+                if best is None or score < best[0]:
+                    best = (score, person)
+    return None if best is None else xywh_to_xyxy(best[1].bbox)
+
+
+def xywh_to_xyxy(bbox: tuple[int, int, int, int]) -> BBox:
+    x, y, w, h = bbox
+    return x, y, x + w, y + h
+
+
+def registration_source(args) -> str:
+    return f"registration_{args.registration_mode}"
+
+
 def parse_bbox(value: str | None) -> BBox | None:
     if value is None:
         return None
     parts = tuple(int(part.strip()) for part in value.split(","))
     if len(parts) != 4:
         raise ValueError("--register-bbox must be x1,y1,x2,y2")
+    return parts
+
+
+def parse_xywh(value: str | None) -> tuple[int, int, int, int] | None:
+    if value is None:
+        return None
+    parts = tuple(int(part.strip()) for part in value.split(","))
+    if len(parts) != 4:
+        raise ValueError("--person-box must be x,y,w,h")
     return parts
 
 

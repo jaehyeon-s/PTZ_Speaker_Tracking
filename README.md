@@ -1,145 +1,153 @@
 # PTZ Speaker Tracking MVP
 
-6/22 발표 목표는 마커를 가진 발표자를 우선 선택하고, 마커가 사라지는
-구간에서는 Re-ID로 같은 사람을 유지하거나 재획득하는 PTZ 추적 MVP입니다.
-MediaPipe는 손들기 같은 보조 등록/복구 경로로 사용합니다.
+이 저장소의 메인 목표는 **Qon PTZ 카메라의 내장 Auto Tracking을 기본
+추적기로 사용하고, Raspberry Pi 5에서 Re-ID로 현재 추적 대상이 맞는지
+검증·교정하는 시스템**입니다.
 
-## MVP Scope
-
-핵심 흐름:
+대상 지정은 다음 순서로 처리합니다.
 
 ```text
-RTSP / camera / video
-  -> person detection
-  -> ArUco marker detection
-  -> marker inside person bbox selects target
-  -> register target appearance for Re-ID
-  -> PTZ command from target bbox center
-  -> if marker disappears:
-       bbox tracker first
-       Re-ID fallback second
-  -> if marker returns:
-       marker lock refreshes the target and Re-ID reference
-  -> optional MediaPipe raised-hand fallback
+1. ArUco 마커를 가진 사람을 발표자로 등록
+2. 마커가 없으면 MediaPipe 손들기 gesture로 발표자 등록
+3. 카메라 내장 트래커가 따라가는 사람이 등록 발표자인지 Re-ID로 검증
+4. mismatch가 확정되면 전체 프레임에서 사람 후보를 찾고 Re-ID로 복구 후보 확인
 ```
 
-역할 구분:
+소프트웨어가 직접 사람을 추적하고 PTZ 명령을 만드는 `src/tracking` 경로는
+**카메라 내장 추적 또는 bbox metadata를 못 쓰는 상황을 위한 백업 데모**입니다.
+본체는 `main.py`가 실행하는 `src/app/verify_demo.py`입니다.
 
-| Feature | Role |
+## 전체 구조
+
+```text
+Qon PTZ Camera
+  - 내장 AI Auto Tracking
+  - 실제 PTZ motor / zoom / smoothing 담당
+  - RTSP 검증 영상 제공
+        |
+        v
+Raspberry Pi 5
+  - marker 우선 발표자 등록
+  - marker가 없으면 MediaPipe gesture 등록
+  - 현재 카메라가 따라가는 영역을 가져옴
+      현재: center crop fallback 또는 jsonl bbox
+      목표: Qon/ONVIF/RTSP metadata live bbox
+  - Re-ID로 등록 발표자와 현재 추적 대상 비교
+  - mismatch 시 YOLO/person detector로 복구 후보 탐색
+        |
+        v
+Optional Camera Control
+  - tracking / zone mode CGI 전환
+  - 추후 target reassignment 명령 발견 시 교정 제어
+```
+
+## 현재 구현 상태
+
+| 항목 | 상태 |
 |---|---|
-| ArUco marker | 신뢰 가능한 초기 target selection |
-| Re-ID | 마커가 안 보이는 구간의 identity 유지/복구 |
-| MediaPipe | 마커 테스트 후 추가할 gesture fallback |
-| PTZ control | target bbox 중심 기준 pan/tilt 명령 생성 |
-| Qon CGI control | optional tracking/zone mode switch 실험용 |
+| Qon tracking/zone mode 전환 | 구현됨 |
+| RTSP 기반 검증 앱 | 구현됨 |
+| marker 기반 등록 | 구현됨 |
+| MediaPipe 손들기 등록 | 구현됨 |
+| Re-ID 검증 | 구현됨, 현재 HSV baseline |
+| mismatch 후 복구 후보 탐색 | optional YOLO로 구현됨 |
+| 카메라 live tracking bbox | 미확보, center crop/jsonl fallback |
+| 카메라 target 재지정 명령 | 미확보 |
 
-## Current Status
+가장 큰 기술 리스크는 두 가지입니다.
 
-현재 기본 실행 경로는 marker-first MVP입니다.
+1. **카메라가 실제로 따라가는 bbox를 실시간으로 가져오는 경로**
+   - 현재 `center` 모드는 “카메라가 대상을 중앙에 둔다”는 가정입니다.
+   - 발표용 MVP에서는 동작 확인이 가능하지만, 완성형은 live bbox metadata가 필요합니다.
+
+2. **Re-ID 품질**
+   - 현재는 빠른 MVP 검증을 위한 HSV histogram 기반 matcher입니다.
+   - 발표 전 가능하면 OSNet/FastReID 계열 embedding 모델로 교체하는 것이 목표입니다.
+
+## 실행 방법
+
+기본 실행은 Qon 내장 추적을 검증하는 경로입니다.
 
 ```bash
-python3 main.py --source 0
-python3 main.py --source path/to/video.mp4
-python3 main.py --source "$RTSP_URL"
+python3 main.py --source "$RTSP_URL" --region-mode center
 ```
 
-마커 ID를 하나로 제한:
-
-```bash
-python3 main.py --source "$RTSP_URL" --target-marker-id 7
-```
-
-NCNN detector 사용 예:
+첫 프레임에서 카메라가 따라가는 중앙 영역을 바로 등록:
 
 ```bash
 python3 main.py \
   --source "$RTSP_URL" \
-  --detector ncnn \
-  --ncnn-param models/yolo.param \
-  --ncnn-bin models/yolo.bin \
-  --ncnn-input-size 416 \
-  --target-marker-id 7
+  --region-mode center \
+  --register-on-start
 ```
 
-MediaPipe gesture fallback 활성화:
-
-```bash
-python3 main.py --source "$RTSP_URL" --gesture
-```
-
-Headless 로그/영상 저장:
+마커를 가진 사람을 발표자로 등록:
 
 ```bash
 python3 main.py \
   --source "$RTSP_URL" \
+  --region-mode center \
+  --registration-mode marker \
   --target-marker-id 7 \
-  --no-window \
-  --save-debug-video logs/marker_reid.mp4 \
-  --log-csv logs/marker_reid.csv
+  --register-on-start
 ```
 
-## Runtime Behavior
-
-상태는 다음 의미로 사용합니다.
-
-| State | Meaning |
-|---|---|
-| `IDLE` | 아직 대상 없음 |
-| `ACTIVE` | 마커 또는 bbox tracker로 대상 추적 중 |
-| `REID_TRACKING` | 마커가 사라진 뒤 Re-ID로 재획득/유지 중 |
-| `SUSPENDED` | 대상 후보를 찾지 못해 일시 정지 |
-| `ENDED` | 종료 |
-
-기본적으로 Re-ID fallback은 켜져 있습니다. 끄려면:
+마커가 있으면 마커를 우선 사용하고, 없으면 MediaPipe 손들기로 등록:
 
 ```bash
-python3 main.py --source "$RTSP_URL" --disable-reid
+python3 main.py \
+  --source "$RTSP_URL" \
+  --region-mode center \
+  --registration-mode marker-or-gesture \
+  --target-marker-id 7 \
+  --register-on-start
 ```
 
-현재 Re-ID 구현은 발표 전 빠른 검증을 위한 HSV appearance matcher입니다.
-마커로 선택된 사람의 상반신 색상 히스토그램과 bbox 비율을 저장하고, 마커가
-없을 때 사람 후보 중 가장 비슷한 bbox를 고릅니다. 최종 정확도를 위해서는
-이 부분을 OSNet/FastReID 등 embedding 기반 모델로 교체하는 것이 다음 단계입니다.
+수동 bbox로 등록:
 
-## Keyboard Controls
-
-```text
-q  quit
-r  reset target and wait for marker reacquisition
-s  stop tracking
-m  toggle marker-only mode
-g  toggle MediaPipe gesture fallback
+```bash
+python3 main.py \
+  --source "$RTSP_URL" \
+  --region-mode center \
+  --register-on-start \
+  --register-bbox 420,120,780,700
 ```
 
-## Project Structure
+검증 로그와 결과 영상 저장:
 
-```text
-PTZ_Speaker_Tracking/
-├── main.py                         # marker-first MVP entry point
-├── src/
-│   ├── tracking/
-│   │   ├── marker_reid_demo.py     # marker + Re-ID + MediaPipe loop
-│   │   ├── marker_detector.py      # ArUco detector
-│   │   ├── person_detector.py      # HOG / OpenCV YOLO / NCNN adapters
-│   │   ├── target_selector.py      # marker and bbox target selection
-│   │   ├── target_state.py         # tracking state/data models
-│   │   ├── gesture_detector.py     # MediaPipe raised-hand fallback
-│   │   └── ptz_controller.py       # PTZ simulator / hardware placeholder
-│   ├── reid/
-│   │   ├── appearance.py           # current lightweight Re-ID matcher
-│   │   └── verifier.py             # Qon verifier support
-│   ├── camera/
-│   │   ├── qon_control.py          # optional tracking/zone mode CGI control
-│   │   └── region_provider.py      # Qon bbox/center crop adapter
-│   └── app/
-│       └── verify_demo.py          # optional Qon internal tracking verifier
-└── tests/
+```bash
+python3 main.py \
+  --source "$RTSP_URL" \
+  --region-mode center \
+  --registration-mode marker-or-gesture \
+  --target-marker-id 7 \
+  --register-on-start \
+  --no-window \
+  --output logs/qon_verify.mp4 \
+  --log-csv logs/qon_verify.csv
 ```
 
-## Optional Qon Mode Control
+## 주요 옵션
 
-카메라 웹 UI Network 캡처로 확인된 mode switch는 보조 기능으로 남겨둡니다.
-주소와 인증 정보는 저장소에 넣지 않고 실행 시 제공합니다.
+| 옵션 | 설명 |
+|---|---|
+| `--source` | RTSP URL, 비디오 파일, 카메라 index |
+| `--region-mode center` | 카메라 추적 대상이 중앙에 있다고 보고 중앙 crop 검증 |
+| `--region-mode jsonl` | 캡처한 bbox jsonl로 검증 |
+| `--registration-mode observed` | 현재 관측 영역을 등록 |
+| `--registration-mode marker` | 마커가 들어있는 사람 bbox를 등록 |
+| `--registration-mode gesture` | MediaPipe 손들기 대상 등록 |
+| `--registration-mode marker-or-gesture` | 마커 우선, 없으면 gesture |
+| `--target-marker-id` | 특정 ArUco marker id만 허용 |
+| `--verify-every-frames` | 몇 프레임마다 Re-ID 검증할지 |
+| `--reid-threshold` | Re-ID 검증 threshold |
+| `--mismatch-limit` | 연속 실패 몇 회부터 mismatch로 볼지 |
+| `--recovery-model` | mismatch 후 전체 프레임 후보 탐색에 사용할 YOLO 모델 |
+
+## Qon Mode Control
+
+카메라 웹 UI Network 캡처로 확인된 CGI 요청을 이용해 tracking/zone 모드를
+조회하거나 바꿀 수 있습니다.
 
 ```bash
 export QON_CAMERA_URL='http://camera-address'
@@ -149,7 +157,7 @@ python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" tracking
 python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" zone
 ```
 
-확인된 CGI 요청:
+확인된 요청:
 
 ```text
 POST /cgi-bin/param.cgi?get_path   path=/data/track.conf
@@ -157,31 +165,76 @@ POST /cgi-bin/param.cgi?write_path path=/data/track.conf&common.track=1  (tracki
 POST /cgi-bin/param.cgi?write_path path=/data/track.conf&common.track=0  (zone)
 ```
 
-함께 캡처된 `post_visca` 요청은 tracking/zone 양쪽 전환에 동일하게 발생했기
-때문에, 목적이 확인되기 전까지 자동 전송하지 않습니다.
+모드 변경 시 함께 캡처된 `post_visca` 요청은 tracking/zone 양쪽 전환에서
+동일하게 발생했습니다. 아직 목적이 확인되지 않았기 때문에 코드에서 자동으로
+전송하지 않습니다.
 
-## 6/22 Implementation Plan
+## 백업 실행 경로
 
-1. Marker-first loop stability
-   - camera/RTSP 입력 안정화
-   - ArUco marker selection 검증
-   - PTZ simulator 로그와 debug video 확보
+`src/tracking/marker_reid_demo.py`는 카메라 내장 추적을 쓰지 않고, Pi에서
+사람 검출·마커 선택·Re-ID fallback·PTZ 명령 생성을 모두 수행하는 백업
+데모입니다.
 
-2. Re-ID fallback
-   - marker lock 시 reference 등록
-   - marker missing 시 detector 후보 중 Re-ID best match 선택
-   - 오추적/재획득 케이스 CSV 기록
-   - lightweight matcher를 embedding 모델로 교체 검토
+```bash
+python3 -m src.tracking.marker_reid_demo \
+  --source "$RTSP_URL" \
+  --target-marker-id 7
+```
 
-3. MediaPipe fallback
-   - raised-hand gesture로 임시 target 등록
-   - marker/Re-ID 실패 시 보조 복구 경로로 제한
+이 경로는 Qon metadata나 재지정 API를 확보하지 못했을 때 발표 데모를
+유지하기 위한 fallback입니다. 최종 설계의 본체는 아닙니다.
 
-4. Hardware integration
-   - PTZ simulator command를 실제 VISCA/ONVIF/vendor command로 교체
-   - bbox와 command 로그를 발표 테스트 자료로 정리
+## 프로젝트 구조
 
-## Setup
+```text
+PTZ_Speaker_Tracking/
+├── main.py                         # Qon 내장 추적 검증 메인 진입점
+├── src/
+│   ├── app/
+│   │   └── verify_demo.py          # 메인 Re-ID 검증/복구 앱
+│   ├── camera/
+│   │   ├── qon_control.py          # Qon tracking/zone CGI 제어
+│   │   └── region_provider.py      # center/jsonl bbox provider
+│   ├── reid/
+│   │   ├── appearance.py           # 현재 HSV baseline Re-ID
+│   │   └── verifier.py             # Re-ID 검증 상태머신
+│   ├── recovery/
+│   │   └── candidate_detector.py   # mismatch 후 YOLO 후보 탐색
+│   ├── tracking/
+│   │   ├── marker_reid_demo.py     # 직접 추적 fallback 데모
+│   │   ├── marker_detector.py      # ArUco detector
+│   │   ├── gesture_detector.py     # MediaPipe 손들기 detector
+│   │   ├── person_detector.py      # HOG / OpenCV YOLO / NCNN detector
+│   │   └── ptz_controller.py       # PTZ simulator / hardware placeholder
+│   └── vision/
+│       ├── capture.py
+│       └── models.py
+└── tests/
+```
+
+## 6/22까지 우선순위
+
+1. **B 구조를 본체로 고정**
+   - README, `main.py`, 발표 설명 모두 Qon 내장 추적 + Re-ID 검증 기준으로 통일
+
+2. **카메라 추적 bbox 확보**
+   - ONVIF Analytics metadata
+   - Qon CGI/RTSP 부가 metadata
+   - debug overlay가 픽셀에 burn-in인지, 좌표 metadata인지 확인
+
+3. **Re-ID embedding 모델 적용**
+   - 현재 HSV baseline과 OSNet/FastReID embedding 비교
+   - Pi 5에서는 후보 crop 수를 제한해 실시간성 확보
+
+4. **MediaPipe 등록 경로 안정화**
+   - 마커 없을 때 손든 사람을 등록
+   - 단일 person pose 가정과 한계를 발표 자료에 명시
+
+5. **교정 제어**
+   - target reassignment 명령을 찾으면 직접 교정
+   - 못 찾으면 zone/tracking mode 전환 또는 전체 프레임 복구 후보 로그로 제한
+
+## 설치
 
 ```bash
 python3 -m venv .venv
@@ -190,14 +243,14 @@ python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
 ```
 
-Optional packages:
+선택 설치:
 
 ```bash
 python3 -m pip install mediapipe
 python3 -m pip install "ultralytics>=8.3.0"
 ```
 
-## Test
+## 테스트
 
 ```bash
 python3 -m unittest discover -s tests -v
