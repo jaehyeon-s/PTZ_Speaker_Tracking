@@ -89,7 +89,8 @@ python3 main.py \
   --region-mode center \
   --registration-mode marker \
   --target-marker-id 7 \
-  --register-on-start
+  --register-on-start \
+  --registration-timeout-frames 120
 ```
 
 마커가 있으면 마커를 우선 사용하고, 없으면 MediaPipe 손들기로 등록:
@@ -100,7 +101,22 @@ python3 main.py \
   --region-mode center \
   --registration-mode marker-or-gesture \
   --target-marker-id 7 \
-  --register-on-start
+  --register-on-start \
+  --registration-timeout-frames 180
+```
+
+`marker-or-gesture`에서 gesture는 손을 든 상태가 일정 시간 유지되어야 하므로,
+첫 프레임 하나만 보고 등록하지 않습니다. `--registration-timeout-frames` 동안
+마커 또는 gesture 등록을 계속 재시도합니다.
+
+`center` 모드에서는 기본적으로 마커/gesture는 “누가 발표자인지 확인”하는 데
+사용하고, 실제 Re-ID reference는 카메라가 현재 따라가는 중앙 관측 영역으로
+등록합니다. 이렇게 해야 등록 crop과 이후 검증 crop의 형태가 크게 달라지는
+문제를 줄일 수 있습니다. 마커/gesture로 선택된 사람 bbox 자체를 reference로
+쓰고 싶으면 다음 옵션을 추가합니다.
+
+```bash
+--registration-reference selected
 ```
 
 수동 bbox로 등록:
@@ -138,6 +154,9 @@ python3 main.py \
 | `--registration-mode marker` | 마커가 들어있는 사람 bbox를 등록 |
 | `--registration-mode gesture` | MediaPipe 손들기 대상 등록 |
 | `--registration-mode marker-or-gesture` | 마커 우선, 없으면 gesture |
+| `--registration-reference observed` | 등록 확인 후 카메라 관측 영역을 Re-ID reference로 사용 |
+| `--registration-reference selected` | 마커/gesture로 선택한 사람 bbox를 Re-ID reference로 사용 |
+| `--registration-timeout-frames` | `--register-on-start` 시 등록 재시도 최대 프레임 수 |
 | `--target-marker-id` | 특정 ArUco marker id만 허용 |
 | `--verify-every-frames` | 몇 프레임마다 Re-ID 검증할지 |
 | `--reid-threshold` | Re-ID 검증 threshold |

@@ -49,6 +49,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--center-height-ratio", type=float, default=0.86)
     parser.add_argument("--register-on-start", action="store_true", help="Register the first observed region as presenter")
     parser.add_argument("--register-bbox", default=None, help="Registration bbox x1,y1,x2,y2; otherwise uses observed region")
+    parser.add_argument(
+        "--registration-reference",
+        choices=("observed", "selected"),
+        default="observed",
+        help="Use the camera-observed region or selected marker/gesture person bbox as the Re-ID reference",
+    )
+    parser.add_argument(
+        "--registration-timeout-frames",
+        type=int,
+        default=90,
+        help="Maximum frames to wait for marker/gesture registration when --register-on-start is used",
+    )
     parser.add_argument("--verify-every-frames", type=int, default=30)
     parser.add_argument("--reid-threshold", type=float, default=0.68)
     parser.add_argument("--mismatch-limit", type=int, default=2)
@@ -140,7 +152,7 @@ def main() -> int:
                     gesture_detector,
                 )
                 if selected_bbox is None or not verifier.register(frame, selected_bbox):
-                    if args.no_window:
+                    if args.no_window and frame_index >= max(1, args.registration_timeout_frames):
                         print("Could not register presenter from the available frame.")
                         return 1
                 else:
@@ -204,6 +216,9 @@ def main() -> int:
                     last_result = VerificationResult(
                         TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
+        if args.register_on_start and args.no_window and not verifier.registered:
+            print("Could not register presenter before the video source ended.")
+            return 1
     finally:
         video.release()
         if writer:
@@ -260,13 +275,19 @@ def select_registration_bbox(
     if args.registration_mode in ("marker", "marker-or-gesture"):
         marker_bbox = select_marker_person_bbox(people, markers, args.target_marker_id)
         if marker_bbox is not None:
-            return marker_bbox
+            return selected_reference_bbox(args, observed_bbox, marker_bbox)
     if args.registration_mode in ("gesture", "marker-or-gesture") and gesture_detector is not None:
         raised = gesture_detector.detect_raised_hand_indices(frame, people)
         person = gesture_detector.update(people, raised)
         if person is not None:
-            return xywh_to_xyxy(person.bbox)
+            return selected_reference_bbox(args, observed_bbox, xywh_to_xyxy(person.bbox))
     return None
+
+
+def selected_reference_bbox(args, observed_bbox: BBox | None, selected_bbox: BBox) -> BBox | None:
+    if args.registration_reference == "observed":
+        return observed_bbox
+    return selected_bbox
 
 
 def select_marker_person_bbox(people: list[PersonDetection], markers, target_marker_id: int | None) -> BBox | None:
