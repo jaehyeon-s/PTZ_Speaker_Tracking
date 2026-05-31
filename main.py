@@ -1,6 +1,6 @@
-"""Command-line entry point for Qon camera-managed Re-ID verification."""
+"""Command-line entry point for marker-first PTZ speaker tracking MVP."""
 
-from src.app.verify_demo import main
+from src.tracking.marker_reid_demo import main
 
 
 if __name__ == "__main__":
