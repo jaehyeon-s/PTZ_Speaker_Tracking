@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 from pathlib import Path
 
+from src.camera.qon_control import QonTrackingControl
 from src.camera.region_provider import CenterCropRegionProvider, JsonlRegionProvider
 from src.recovery.candidate_detector import YoloRecoveryDetector
-from src.reid.appearance import AppearanceReIdentifier
+from src.reid.appearance import build_re_identifier
 from src.reid.verifier import PresenterVerifier, VerifierConfig
 from src.tracking.gesture_detector import GestureFallbackDetector
 from src.tracking.marker_detector import ArucoMarkerDetector
@@ -62,8 +64,35 @@ def parse_args() -> argparse.Namespace:
         help="Maximum frames to wait for marker/gesture registration when --register-on-start is used",
     )
     parser.add_argument("--verify-every-frames", type=int, default=30)
+    parser.add_argument("--reid-backend", choices=("hsv", "onnx"), default="hsv")
+    parser.add_argument("--reid-model", default=None, help="OSNet-style ONNX Re-ID model path")
     parser.add_argument("--reid-threshold", type=float, default=0.68)
     parser.add_argument("--mismatch-limit", type=int, default=2)
+    parser.add_argument(
+        "--marker-positive",
+        action="store_true",
+        help="Treat the target marker visible inside the observed region as a strong verification signal",
+    )
+    parser.add_argument("--camera-url", default=None, help="Qon camera origin, for example http://192.168.11.88")
+    parser.add_argument("--camera-username", default=None)
+    parser.add_argument("--camera-password-env", default=None)
+    parser.add_argument("--camera-auth-mode", choices=("none", "basic", "digest"), default="digest")
+    parser.add_argument(
+        "--control-camera",
+        action="store_true",
+        help="Enable Qon tracking on registration and disable it on confirmed mismatch",
+    )
+    parser.add_argument(
+        "--enable-camera-tracking-on-start",
+        action="store_true",
+        help="Enable Qon internal tracking as soon as the verifier starts",
+    )
+    parser.add_argument(
+        "--recovery-action",
+        choices=("none", "stop", "home", "zoomout"),
+        default="home",
+        help="Camera action after confirmed mismatch when --control-camera is enabled",
+    )
     parser.add_argument("--recovery-model", default=None, help="Optional YOLO model used only after confirmed mismatch")
     parser.add_argument("--recovery-imgsz", type=int, default=416)
     parser.add_argument("--recovery-confidence", type=float, default=0.4)
@@ -92,15 +121,23 @@ def main() -> int:
         return 1
 
     provider = build_region_provider(args)
+    camera_control = build_camera_control(args)
+    supervisor = CameraTrackingSupervisor(camera_control, args.recovery_action)
+    if args.enable_camera_tracking_on_start:
+        supervisor.enable_tracking("startup")
     registration_detector = build_registration_detector(args)
-    marker_detector = ArucoMarkerDetector() if args.registration_mode in ("marker", "marker-or-gesture") else None
+    marker_detector = (
+        ArucoMarkerDetector()
+        if args.registration_mode in ("marker", "marker-or-gesture") or args.marker_positive
+        else None
+    )
     gesture_detector = (
         GestureFallbackDetector()
         if args.registration_mode in ("gesture", "marker-or-gesture")
         else None
     )
     verifier = PresenterVerifier(
-        AppearanceReIdentifier(args.reid_threshold),
+        build_re_identifier(args.reid_backend, args.reid_threshold, args.reid_model),
         VerifierConfig(max(1, args.mismatch_limit)),
     )
     recovery_detector = (
@@ -121,7 +158,17 @@ def main() -> int:
         log_file = Path(args.log_csv).open("w", newline="", encoding="utf-8")
         log_writer = csv.writer(log_file)
         log_writer.writerow(
-            ["frame", "state", "event", "region_source", "bbox", "score", "recovery_bbox", "recovery_score"]
+            [
+                "frame",
+                "state",
+                "event",
+                "region_source",
+                "bbox",
+                "score",
+                "recovery_bbox",
+                "recovery_score",
+                "camera_action",
+            ]
         )
 
     frame_index = 0
@@ -159,11 +206,19 @@ def main() -> int:
                     last_result = VerificationResult(
                         TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
+                    supervisor.enable_tracking("registered")
                     registered_this_frame = True
 
             should_verify = frame_index == 1 or frame_index % max(1, args.verify_every_frames) == 0
             if verifier.registered and should_verify and not registered_this_frame:
-                last_result = verifier.verify(frame, bbox, region_source)
+                marker_verified = (
+                    args.marker_positive
+                    and marker_visible_in_observed_region(markers, bbox, args.target_marker_id)
+                )
+                if marker_verified:
+                    last_result = verifier.mark_verified(bbox, 1.0, "MARKER_VERIFIED", region_source)
+                else:
+                    last_result = verifier.verify(frame, bbox, region_source)
                 recovery_bbox, recovery_score = None, 0.0
                 if last_result.event == "PRESENTER_MISMATCH" and recovery_detector is not None:
                     candidate, recovery_score = verifier.find_presenter(frame, recovery_detector.detect(frame))
@@ -176,6 +231,8 @@ def main() -> int:
                             "RECOVERY_CANDIDATE_FOUND",
                             last_result.source,
                         )
+                if last_result.event == "PRESENTER_MISMATCH":
+                    supervisor.confirm_mismatch()
                 print_status(frame_index, last_result, recovery_bbox, recovery_score)
 
             if log_writer and should_verify:
@@ -189,6 +246,7 @@ def main() -> int:
                         f"{last_result.score:.3f}",
                         format_bbox(recovery_bbox),
                         f"{recovery_score:.3f}",
+                        supervisor.last_action,
                     ]
                 )
                 log_file.flush()
@@ -216,6 +274,7 @@ def main() -> int:
                     last_result = VerificationResult(
                         TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
+                    supervisor.enable_tracking("manual_register")
         if args.register_on_start and args.no_window and not verifier.registered:
             print("Could not register presenter before the video source ended.")
             return 1
@@ -234,6 +293,57 @@ def build_region_provider(args):
     if args.region_mode == "jsonl":
         return JsonlRegionProvider(args.bbox_jsonl)
     return CenterCropRegionProvider(args.center_width_ratio, args.center_height_ratio)
+
+
+def build_camera_control(args):
+    if not args.control_camera and not args.enable_camera_tracking_on_start:
+        return None
+    if not args.camera_url:
+        raise ValueError("--control-camera requires --camera-url")
+    password = os.environ.get(args.camera_password_env) if args.camera_password_env else None
+    return QonTrackingControl(
+        args.camera_url,
+        args.camera_username,
+        password,
+        auth_mode=args.camera_auth_mode,
+    )
+
+
+class CameraTrackingSupervisor:
+    """Coordinate Qon internal tracking ownership with verifier state."""
+
+    def __init__(self, control: QonTrackingControl | None, recovery_action: str = "stop") -> None:
+        self.control = control
+        self.recovery_action = recovery_action
+        self.tracking_enabled = False
+        self.mismatch_handled = False
+        self.last_action = ""
+
+    def enable_tracking(self, reason: str) -> None:
+        if self.control is None or self.tracking_enabled:
+            return
+        self.control.set_presenter_mode()
+        self.control.enable_auto_tracking()
+        self.tracking_enabled = True
+        self.mismatch_handled = False
+        self.last_action = f"tracking_on:{reason}"
+
+    def confirm_mismatch(self) -> None:
+        if self.control is None or self.mismatch_handled:
+            return
+        self.control.enable_zone_tracking()
+        self.tracking_enabled = False
+        if self.recovery_action == "stop":
+            self.control.stop()
+        elif self.recovery_action == "home":
+            self.control.stop()
+            self.control.home()
+        elif self.recovery_action == "zoomout":
+            self.control.stop()
+            self.control.zoom_out()
+            self.control.zoom_stop()
+        self.mismatch_handled = True
+        self.last_action = f"tracking_off:mismatch:{self.recovery_action}"
 
 
 def build_registration_detector(args):
@@ -305,6 +415,19 @@ def select_marker_person_bbox(people: list[PersonDetection], markers, target_mar
     return None if best is None else xywh_to_xyxy(best[1].bbox)
 
 
+def marker_visible_in_observed_region(markers, observed_bbox: BBox | None, target_marker_id: int | None) -> bool:
+    if observed_bbox is None:
+        return False
+    x1, y1, x2, y2 = observed_bbox
+    observed_xywh = (x1, y1, x2 - x1, y2 - y1)
+    for marker in markers:
+        if target_marker_id is not None and marker.marker_id != target_marker_id:
+            continue
+        if point_in_bbox(marker.center, observed_xywh):
+            return True
+    return False
+
+
 def xywh_to_xyxy(bbox: tuple[int, int, int, int]) -> BBox:
     x, y, w, h = bbox
     return x, y, x + w, y + h
@@ -372,3 +495,7 @@ def write_video(cv2, writer, output: str | None, frame, source_fps: float):
             raise RuntimeError(f"Could not open output video: {output}")
     writer.write(frame)
     return writer
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -10,8 +10,11 @@ BBox = tuple[int, int, int, int]  # x1, y1, x2, y2
 class TrackingState(str, Enum):
     UNREGISTERED = "UNREGISTERED"
     VERIFIED = "VERIFIED"
+    SUSPECT = "SUSPECT"
     MISMATCH = "MISMATCH"
     NO_REGION = "NO_REGION"
+    RECOVERY = "RECOVERY"
+    LOST = "LOST"
 
 
 @dataclass(frozen=True)

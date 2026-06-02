@@ -10,6 +10,7 @@ from src.vision.models import BBox, Candidate, TrackingState, VerificationResult
 @dataclass(frozen=True)
 class VerifierConfig:
     mismatch_limit: int = 2
+    recovery_limit: int = 90
 
 
 class PresenterVerifier:
@@ -37,9 +38,15 @@ class PresenterVerifier:
 
         self.mismatch_count += 1
         event = "MISMATCH_SUSPECTED"
+        state = TrackingState.SUSPECT
         if self.mismatch_count >= self.config.mismatch_limit:
             event = "PRESENTER_MISMATCH"
-        return VerificationResult(TrackingState.MISMATCH, bbox, score, event, source)
+            state = TrackingState.MISMATCH
+        return VerificationResult(state, bbox, score, event, source)
+
+    def mark_verified(self, bbox: BBox | None, score: float = 1.0, event: str = "PRESENTER_VERIFIED", source: str = "") -> VerificationResult:
+        self.mismatch_count = 0
+        return VerificationResult(TrackingState.VERIFIED, bbox, score, event, source)
 
     def find_presenter(self, frame, candidates: list[Candidate]) -> tuple[Candidate | None, float]:
         return self.matcher.best_match(frame, candidates)

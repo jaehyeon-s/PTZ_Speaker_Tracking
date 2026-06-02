@@ -61,6 +61,30 @@ class QonTrackingControlTests(unittest.TestCase):
         self.assertEqual(parse_qs(zone_request.data.decode())["common.track"], ["0"])
         self.assertEqual(parse_qs(tracking_request.data.decode())["common.track"], ["1"])
 
+    def test_sets_observed_debug_and_hint_flags(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+
+        control.set_humanoid_frame(2)
+        debug_request, _ = opener.requests[-1]
+        control.set_tracking_hint(False)
+        hint_request, _ = opener.requests[-1]
+
+        self.assertEqual(parse_qs(debug_request.data.decode())["common.debug_mode"], ["2"])
+        self.assertEqual(parse_qs(hint_request.data.decode())["common.osd_mode"], ["0"])
+
+    def test_sends_observed_ptz_stop_and_zoom_commands(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+
+        control.stop()
+        stop_request, _ = opener.requests[-1]
+        control.zoom_out()
+        zoom_request, _ = opener.requests[-1]
+
+        self.assertEqual(stop_request.full_url, "http://camera/cgi-bin/ptzctrl.cgi?ptzcmd&ptzstop&10&10")
+        self.assertEqual(zoom_request.full_url, "http://camera/cgi-bin/ptzctrl.cgi?ptzcmd&zoomout&5")
+
 
 if __name__ == "__main__":
     unittest.main()

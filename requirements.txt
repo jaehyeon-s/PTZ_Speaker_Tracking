@@ -7,3 +7,6 @@ opencv-contrib-python>=4.9.0,<4.12
 
 # Optional YOLO/recovery detection only:
 # ultralytics>=8.3.0
+
+# Optional OSNet/ONNX Re-ID backend:
+# onnxruntime>=1.17.0

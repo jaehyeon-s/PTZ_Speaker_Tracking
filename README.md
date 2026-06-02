@@ -1,32 +1,29 @@
 # PTZ Speaker Tracking MVP
 
-이 저장소의 메인 목표는 **마커를 가진 발표자를 우선 선택하고, 마커가
-사라지는 구간에서는 Re-ID로 같은 사람을 유지하거나 재획득하는 PTZ 추적
-MVP**입니다. MediaPipe 손들기 인식은 마커가 없을 때 사용할 보조 등록
-경로입니다.
+이 저장소의 메인 목표는 **카메라 내장 Auto Tracking 위에 마커와 Re-ID
+기반 정체성 검증 레이어를 얹는 PTZ 추적 MVP**입니다. 카메라가 PTZ 추적을
+수행하고, Raspberry Pi 5는 마커로 등록된 발표자를 OSNet/appearance Re-ID로
+검증해 잘못된 사람을 따라가는 상황을 감지하고 차단합니다.
 
-현재 기본 실행 경로는 `main.py`가 호출하는
-`src/tracking/marker_reid_demo.py`입니다.
+현재 권장 실행 경로는 `python3 -m src.app.verify_demo`입니다. `main.py`가
+호출하는 `src/tracking/marker_reid_demo.py`는 카메라 내장 추적을 쓰지 않는
+직접 추적 fallback입니다.
 
 ```text
-Camera / RTSP / Video
-  -> person detection
-  -> ArUco marker detection
-  -> marker inside person bbox selects target
-  -> selected target appearance is registered for Re-ID
-  -> PTZ command is generated from target bbox center
-  -> if marker disappears:
-       bbox tracker first
-       Re-ID fallback second
-  -> if marker returns:
-       marker lock refreshes target and Re-ID reference
-  -> optional MediaPipe raised-hand fallback
+Qon PTZ internal tracking
+  -> Pi receives RTSP/video frames
+  -> marker registers trusted presenter identity
+  -> Presenter mode + tracking are enabled after registration
+  -> Re-ID verifies the current camera-followed region
+  -> marker visible acts as a strong positive signal
+  -> sustained mismatch disables camera tracking and triggers recovery action
+  -> marker-based registration can resume tracking
 ```
 
 Qon 카메라의 내장 Auto Tracking 검증 경로(`src/app/verify_demo.py`)와
-tracking/zone CGI 제어(`src/camera/qon_control.py`)는 **보조 실험 경로**로
-남겨둡니다. Qon live tracking bbox 또는 target reassignment API가 확보되면
-이 경로를 다시 본체로 올릴 수 있습니다.
+tracking/zone/PTZ CGI 제어(`src/camera/qon_control.py`)가 현재 권장 경로입니다.
+`marker_reid_demo.py`는 카메라 내장 추적을 끄고 외부에서 직접 PTZ 명령을
+생성해야 할 때 쓰는 fallback/비교 경로로 남겨둡니다.
 
 ## 현재 구현 상태
 
@@ -35,25 +32,24 @@ tracking/zone CGI 제어(`src/camera/qon_control.py`)는 **보조 실험 경로*
 | ArUco marker 기반 대상 선택 | 구현됨 |
 | 사람 detector | HOG / OpenCV YOLO / NCNN / manual 지원 |
 | bbox 기반 target 유지 | 구현됨 |
-| Re-ID fallback | 구현됨, 현재 HSV baseline |
+| Re-ID verifier | HSV baseline / OSNet-style ONNX backend 구현 |
 | MediaPipe 손들기 fallback | 구현됨, 선택 기능 |
 | PTZ 명령 생성 | simulator 구현됨 |
-| 실제 PTZ 하드웨어 제어 | VISCA/ONVIF/vendor command 연결 필요 |
-| Qon tracking/zone CGI 제어 | 보조 모듈로 구현됨 |
+| 실제 PTZ 하드웨어 제어 | Qon HTTP CGI tracking/stop/home/zoom 기본 구현 |
+| Qon tracking/zone CGI 제어 | 구현됨 |
 | Qon live tracking bbox | 미확보 |
 
 가장 큰 남은 리스크는 두 가지입니다.
 
 1. **Re-ID 품질**
-   - 현재는 빠른 MVP 검증을 위한 HSV histogram 기반 matcher입니다.
-   - 발표 전 가능하면 OSNet/FastReID 계열 embedding 모델로 교체하는 것이
-     좋습니다.
+   - OSNet-style ONNX backend는 연결되어 있지만 모델 파일과 threshold는
+     실제 카메라 영상으로 캘리브레이션해야 합니다.
 
-2. **실제 카메라 제어**
-   - 현재 `PTZSimulator`는 pan/tilt 방향 명령을 출력합니다.
-   - 실제 카메라 제어는 VISCA/ONVIF/vendor SDK 명령으로 교체해야 합니다.
+2. **실제 카메라 bbox**
+   - Qon live tracking bbox endpoint는 아직 미확보입니다.
+   - 현재 verifier는 center crop 또는 jsonl metadata adapter를 사용합니다.
 
-## 실행 방법
+## 직접 추적 fallback 실행 방법
 
 기본 실행:
 
@@ -184,7 +180,57 @@ PTZ_Speaker_Tracking/
 └── tests/
 ```
 
-## Qon 보조 제어
+## 권장 실행: Qon Auto Tracking + Pi Verifier
+
+카메라 내장 tracking을 사용하고, Pi는 현재 중앙 영역 또는 metadata bbox가
+등록된 발표자인지 검증합니다. RTSP 주소가 확인되면 `--source`에 넣습니다.
+
+```bash
+export QON_PASSWORD='camera-password'
+
+python3 -m src.app.verify_demo \
+  --source "$RTSP_URL" \
+  --registration-mode marker \
+  --target-marker-id 7 \
+  --register-on-start \
+  --marker-positive \
+  --reid-backend onnx \
+  --reid-model models/osnet_x0_25.onnx \
+  --reid-threshold 0.72 \
+  --verify-every-frames 6 \
+  --mismatch-limit 8 \
+  --control-camera \
+  --camera-url 'http://192.168.11.88' \
+  --camera-username admin \
+  --camera-password-env QON_PASSWORD \
+  --camera-auth-mode digest \
+  --recovery-action home \
+  --log-csv logs/qon_verifier.csv
+```
+
+동작 정책:
+
+```text
+IDLE/UNREGISTERED: marker가 보일 때까지 등록하지 않음
+VERIFIED: marker visible 또는 Re-ID score 통과
+SUSPECT: Re-ID mismatch가 누적 중인 상태
+MISMATCH: mismatch-limit 초과, 카메라 tracking off + stop/복구 액션
+RECOVERY/LOST: marker 기반 재등록 또는 별도 recovery detector로 후보 탐색
+```
+
+중요한 안전 정책:
+
+```text
+- marker 없는 최초 등록 금지
+- marker가 보이면 강한 positive signal로 사용
+- OSNet은 `--reid-backend onnx --reid-model ...`로 연결, 모델이 없을 때만 HSV baseline 사용
+- Re-ID mismatch는 단발 프레임이 아니라 누적해서 확정
+- mismatch 확정 시 Pi가 카메라와 싸우지 않도록 Zone 모드로 전환한 뒤 stop/home/zoomout 수행
+- marker 재등록이 성공하면 Presenter 모드(`common.track_mode=tracking`)와 Track(`common.track=1`)을 다시 활성화
+- MediaPipe는 identity 확정 수단이 아니라 marker가 없을 때의 보조 후보 제안 수단
+```
+
+## Qon 제어
 
 카메라 웹 UI Network 캡처로 확인된 CGI 요청을 이용해 tracking/zone 모드를
 조회하거나 바꿀 수 있습니다.
@@ -193,8 +239,10 @@ PTZ_Speaker_Tracking/
 export QON_CAMERA_URL='http://camera-address'
 
 python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" status
-python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" tracking
-python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" zone
+python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" --username admin --password-env QON_PASSWORD --auth-mode digest tracking
+python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" --username admin --password-env QON_PASSWORD --auth-mode digest zone
+python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" --username admin --password-env QON_PASSWORD --auth-mode digest stop
+python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" --username admin --password-env QON_PASSWORD --auth-mode digest debug-bbox
 ```
 
 확인된 요청:
@@ -203,6 +251,11 @@ python3 -m src.camera.qon_control --camera-url "$QON_CAMERA_URL" zone
 POST /cgi-bin/param.cgi?get_path   path=/data/track.conf
 POST /cgi-bin/param.cgi?write_path path=/data/track.conf&common.track=1  (tracking)
 POST /cgi-bin/param.cgi?write_path path=/data/track.conf&common.track=0  (zone)
+POST /cgi-bin/param.cgi?write_path path=/data/track.conf&common.debug_mode=2  (bbox debug)
+POST /cgi-bin/param.cgi?write_path path=/data/track.conf&common.osd_mode=1  (tracking hint)
+GET  /cgi-bin/ptzctrl.cgi?ptzcmd&ptzstop&10&10
+GET  /cgi-bin/ptzctrl.cgi?ptzcmd&home&10&10
+GET  /cgi-bin/ptzctrl.cgi?ptzcmd&zoomout&5
 ```
 
 모드 변경 시 함께 캡처된 `post_visca` 요청은 tracking/zone 양쪽 전환에서

@@ -11,7 +11,7 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from src.app.verify_demo import main, select_registration_bbox
+from src.app.verify_demo import CameraTrackingSupervisor, main, marker_visible_in_observed_region, select_registration_bbox
 from src.tracking.target_state import MarkerDetection, PersonDetection
 
 
@@ -79,6 +79,40 @@ class VerifyDemoSmokeTests(unittest.TestCase):
         self.assertEqual(rows[0]["event"], "PRESENTER_REGISTERED")
         self.assertEqual(rows[1]["state"], "VERIFIED")
         self.assertEqual(rows[1]["region_source"], "center_crop")
+
+    def test_marker_positive_requires_marker_inside_observed_region(self):
+        marker = MarkerDetection(7, (50, 40), ((45, 35), (55, 35), (55, 45), (45, 45)))
+
+        self.assertTrue(marker_visible_in_observed_region([marker], (20, 20, 80, 80), 7))
+        self.assertFalse(marker_visible_in_observed_region([marker], (90, 20, 140, 80), 7))
+        self.assertFalse(marker_visible_in_observed_region([marker], (20, 20, 80, 80), 8))
+
+    def test_supervisor_disables_tracking_after_confirmed_mismatch(self):
+        class FakeControl:
+            def __init__(self):
+                self.calls = []
+
+            def enable_auto_tracking(self):
+                self.calls.append("tracking")
+
+            def set_presenter_mode(self):
+                self.calls.append("presenter")
+
+            def enable_zone_tracking(self):
+                self.calls.append("zone")
+
+            def stop(self):
+                self.calls.append("stop")
+
+        control = FakeControl()
+        supervisor = CameraTrackingSupervisor(control, "stop")
+
+        supervisor.enable_tracking("registered")
+        supervisor.confirm_mismatch()
+        supervisor.confirm_mismatch()
+
+        self.assertEqual(control.calls, ["presenter", "tracking", "zone", "stop"])
+        self.assertEqual(supervisor.last_action, "tracking_off:mismatch:stop")
 
 
 if __name__ == "__main__":
