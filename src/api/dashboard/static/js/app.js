@@ -4,7 +4,17 @@ let lastTargetId = null;
 let lastReidEvent = null;
 let lastReidState = null;
 let lastHealthLevel = null;
+let lastTrackingMode = null;
+let lastRecoveryState = null;
+let lastConflictStatus = null;
 let reidTimeline = [];
+
+function setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = value;
+    }
+}
 
 function addLog(message) {
     const logBox = document.getElementById("log-box");
@@ -34,6 +44,8 @@ function addReidTimelineEvent(state, event, score, level) {
 
 function renderReidTimeline() {
     const box = document.getElementById("reidTimelineBox");
+    if (!box) return;
+
     box.innerHTML = "";
 
     reidTimeline.forEach((item) => {
@@ -46,6 +58,8 @@ function renderReidTimeline() {
 
 function setHealthLevelStyle(level) {
     const badge = document.getElementById("healthLevelValue");
+    if (!badge) return;
+
     badge.textContent = level;
     badge.classList.remove("health-good", "health-caution", "health-warning");
 
@@ -55,6 +69,24 @@ function setHealthLevelStyle(level) {
         badge.classList.add("health-caution");
     } else {
         badge.classList.add("health-warning");
+    }
+}
+
+function setModeChipStyle(mode) {
+    const chip = document.getElementById("currentModeValue");
+    if (!chip) return;
+
+    chip.textContent = mode;
+    chip.classList.remove("mode-zone", "mode-class", "mode-marker", "mode-recovery");
+
+    if (mode === "ZONE_TRACKING") {
+        chip.classList.add("mode-zone");
+    } else if (mode === "CLASS_TRACKING") {
+        chip.classList.add("mode-class");
+    } else if (mode === "MARKER_TRACKING") {
+        chip.classList.add("mode-marker");
+    } else {
+        chip.classList.add("mode-recovery");
     }
 }
 
@@ -79,22 +111,22 @@ async function fetchStatus() {
         const response = await fetch("/api/status");
         const data = await response.json();
 
-        document.getElementById("detectorValue").textContent = data.detector;
-        document.getElementById("trackerValue").textContent = data.tracker;
-        document.getElementById("fpsValue").textContent = data.fps;
-        document.getElementById("targetIdValue").textContent = data.target_id;
-        document.getElementById("zoneLockValue").textContent = data.zone_lock;
-        document.getElementById("ptzValue").textContent = data.ptz_status;
-        document.getElementById("sessionValue").textContent = data.session_state;
-        document.getElementById("sessionBadge").textContent = `Session ${data.session_state}`;
+        setText("detectorValue", data.detector);
+        setText("trackerValue", data.tracker);
+        setText("fpsValue", data.fps);
+        setText("targetIdValue", data.target_id);
+        setText("zoneLockValue", data.zone_lock);
+        setText("ptzValue", data.ptz_status);
+        setText("sessionValue", data.session_state);
+        setText("sessionBadge", `Session ${data.session_state}`);
 
         if (data.health) {
-            document.getElementById("healthScoreValue").textContent = data.health.score;
+            setText("healthScoreValue", data.health.score);
             setHealthLevelStyle(data.health.level);
-            document.getElementById("healthTrackingValue").textContent = data.health.tracking;
-            document.getElementById("healthReidValue").textContent = data.health.reid;
-            document.getElementById("healthPtzValue").textContent = data.health.ptz;
-            document.getElementById("healthWarningsValue").textContent = data.health.warnings;
+            setText("healthTrackingValue", data.health.tracking);
+            setText("healthReidValue", data.health.reid);
+            setText("healthPtzValue", data.health.ptz);
+            setText("healthWarningsValue", data.health.warnings);
 
             if (lastHealthLevel !== null && lastHealthLevel !== data.health.level) {
                 addLog(`System Health changed: ${lastHealthLevel} → ${data.health.level}`);
@@ -103,24 +135,66 @@ async function fetchStatus() {
             lastHealthLevel = data.health.level;
         }
 
+        if (data.tracking_mode) {
+            setModeChipStyle(data.tracking_mode.current_mode);
+            setText("cameraModeValue", data.tracking_mode.camera_mode);
+            setText("trackingSourceValue", data.tracking_mode.tracking_source);
+            setText("targetTypeValue", data.tracking_mode.target_type);
+            setText("arucoStatusValue", data.tracking_mode.aruco_status);
+            setText("modeReasonValue", data.tracking_mode.mode_reason);
+
+            if (lastTrackingMode !== null && lastTrackingMode !== data.tracking_mode.current_mode) {
+                addLog(`Tracking Mode changed: ${lastTrackingMode} → ${data.tracking_mode.current_mode}`);
+            }
+
+            lastTrackingMode = data.tracking_mode.current_mode;
+        }
+
+        if (data.recovery) {
+            setText("mismatchCountValue", data.recovery.mismatch_count);
+            setText("recoveryTriggerValue", data.recovery.recovery_trigger);
+            setText("recoveryActionValue", data.recovery.recovery_action);
+            setText("recoveryStateValue", data.recovery.recovery_state);
+            setText("lastRecoveryValue", data.recovery.last_recovery);
+
+            if (lastRecoveryState !== null && lastRecoveryState !== data.recovery.recovery_state) {
+                addLog(`Recovery State changed: ${lastRecoveryState} → ${data.recovery.recovery_state}`);
+            }
+
+            lastRecoveryState = data.recovery.recovery_state;
+        }
+
+        if (data.control_ownership) {
+            setText("controlOwnerValue", data.control_ownership.control_owner);
+            setText("trackingEngineValue", data.control_ownership.tracking_engine);
+            setText("conflictStatusValue", data.control_ownership.conflict_status);
+            setText("controlPolicyValue", data.control_ownership.control_policy);
+
+            if (lastConflictStatus !== null && lastConflictStatus !== data.control_ownership.conflict_status) {
+                addLog(`Control Conflict Status changed: ${lastConflictStatus} → ${data.control_ownership.conflict_status}`);
+            }
+
+            lastConflictStatus = data.control_ownership.conflict_status;
+        }
+
         if (data.debug) {
-            document.getElementById("debugTargetValue").textContent = data.target_id;
-            document.getElementById("totalDetectionsValue").textContent = data.debug.total_detections;
-            document.getElementById("insideZoneValue").textContent = data.debug.inside_zone;
-            document.getElementById("outsideZoneValue").textContent = data.debug.outside_zone;
-            document.getElementById("trackStabilityValue").textContent = data.debug.track_stability;
-            document.getElementById("lastReidValue").textContent = data.debug.last_reid;
-            document.getElementById("idSwitchValue").textContent = data.debug.id_switch_count;
+            setText("debugTargetValue", data.target_id);
+            setText("totalDetectionsValue", data.debug.total_detections);
+            setText("insideZoneValue", data.debug.inside_zone);
+            setText("outsideZoneValue", data.debug.outside_zone);
+            setText("trackStabilityValue", data.debug.track_stability);
+            setText("lastReidValue", data.debug.last_reid);
+            setText("idSwitchValue", data.debug.id_switch_count);
         }
 
         if (data.reid) {
-            document.getElementById("reidStateValue").textContent = data.reid.state;
-            document.getElementById("reidScoreValue").textContent = data.reid.score;
-            document.getElementById("reidThresholdValue").textContent = data.reid.threshold;
-            document.getElementById("reidEventValue").textContent = data.reid.event;
-            document.getElementById("reidMethodValue").textContent = data.reid.method;
-            document.getElementById("registeredTargetValue").textContent = data.reid.registered_target;
-            document.getElementById("recoveryModeValue").textContent = data.reid.recovery_mode;
+            setText("reidStateValue", data.reid.state);
+            setText("reidScoreValue", data.reid.score);
+            setText("reidThresholdValue", data.reid.threshold);
+            setText("reidEventValue", data.reid.event);
+            setText("reidMethodValue", data.reid.method);
+            setText("registeredTargetValue", data.reid.registered_target);
+            setText("recoveryModeValue", data.reid.recovery_mode);
 
             if (lastReidEvent !== null && lastReidEvent !== data.reid.event) {
                 addReidTimelineEvent(data.reid.state, data.reid.event, data.reid.score, data.reid.event_level);
@@ -141,11 +215,11 @@ async function fetchStatus() {
         }
 
         if (data.ptz_simulator) {
-            document.getElementById("panDirectionValue").textContent = data.ptz_simulator.pan_direction;
-            document.getElementById("tiltDirectionValue").textContent = data.ptz_simulator.tilt_direction;
-            document.getElementById("zoomStateValue").textContent = data.ptz_simulator.zoom_state;
-            document.getElementById("offsetXValue").textContent = data.ptz_simulator.offset_x;
-            document.getElementById("offsetYValue").textContent = data.ptz_simulator.offset_y;
+            setText("panDirectionValue", data.ptz_simulator.pan_direction);
+            setText("tiltDirectionValue", data.ptz_simulator.tilt_direction);
+            setText("zoomStateValue", data.ptz_simulator.zoom_state);
+            setText("offsetXValue", data.ptz_simulator.offset_x);
+            setText("offsetYValue", data.ptz_simulator.offset_y);
         }
 
         if (lastTargetId !== null && lastTargetId !== data.target_id) {
@@ -267,7 +341,7 @@ async function fetchDetections() {
         const data = await response.json();
         drawBoxes(data);
     } catch (error) {
-        console.error("Detection fetch 실패", error);
+        console.error("Detection fetch 실패:", error);
     }
 }
 
@@ -304,7 +378,7 @@ document.getElementById("zoneBtn").onclick = () => callAPI("/api/zone/toggle", "
 
 fetchStatus();
 fetchDetections();
-addLog("System Health Dashboard initialized");
+addLog("Tracking Mode Dashboard initialized");
 
 setInterval(fetchStatus, 1000);
 setInterval(fetchDetections, 1000);
