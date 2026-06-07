@@ -416,3 +416,43 @@ button:hover {
     background: rgba(255, 90, 106, 0.2);
     color: #ff5a6a;
 }
+
+.mode-card {
+    border: 1px solid rgba(63, 130, 255, 0.35);
+}
+
+.recovery-card {
+    border: 1px solid rgba(240, 195, 48, 0.35);
+}
+
+.ownership-card {
+    border: 1px solid rgba(31, 203, 116, 0.28);
+}
+
+.mode-chip {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.mode-zone {
+    background: rgba(31, 203, 116, 0.2);
+    color: #1fcb74;
+}
+
+.mode-class {
+    background: rgba(47, 111, 255, 0.2);
+    color: #3f82ff;
+}
+
+.mode-marker {
+    background: rgba(255, 166, 0, 0.2);
+    color: orange;
+}
+
+.mode-recovery {
+    background: rgba(0, 255, 255, 0.18);
+    color: cyan;
+}
