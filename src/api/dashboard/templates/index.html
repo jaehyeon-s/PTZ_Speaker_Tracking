@@ -54,7 +54,6 @@
 
                 <div class="position-preset-card">
                     <p class="group-title">위치 기반 프리셋</p>
-
                     <div class="position-layout">
                         <button class="preset-btn pos-left position-btn">좌</button>
                         <button class="preset-btn pos-center position-btn active">중앙</button>
@@ -70,7 +69,7 @@
                     <p>[INFO] RTSP stream connected</p>
                     <p>[INFO] YOLO26n NCNN initialized</p>
                     <p>[INFO] ByteTrack + Zone Lock ready</p>
-                    <p>[INFO] System Health Dashboard ready</p>
+                    <p>[INFO] Tracking Mode Dashboard ready</p>
                 </div>
             </div>
         </div>
@@ -88,6 +87,33 @@
                 <p>Re-ID: <span id="healthReidValue">-</span></p>
                 <p>PTZ: <span id="healthPtzValue">-</span></p>
                 <p>Warnings: <span id="healthWarningsValue">-</span></p>
+            </div>
+
+            <div class="status-card mode-card">
+                <h2>Tracking Mode</h2>
+                <p>Current Mode: <span id="currentModeValue" class="mode-chip">-</span></p>
+                <p>Camera Mode: <span id="cameraModeValue">-</span></p>
+                <p>Tracking Source: <span id="trackingSourceValue">-</span></p>
+                <p>Target Type: <span id="targetTypeValue">-</span></p>
+                <p>ArUco Status: <span id="arucoStatusValue">-</span></p>
+                <p>Mode Reason: <span id="modeReasonValue">-</span></p>
+            </div>
+
+            <div class="status-card recovery-card">
+                <h2>Recovery Action</h2>
+                <p>Mismatch Count: <span id="mismatchCountValue">-</span></p>
+                <p>Recovery Trigger: <span id="recoveryTriggerValue">-</span></p>
+                <p>Current Action: <span id="recoveryActionValue">-</span></p>
+                <p>Recovery State: <span id="recoveryStateValue">-</span></p>
+                <p>Last Recovery: <span id="lastRecoveryValue">-</span></p>
+            </div>
+
+            <div class="status-card ownership-card">
+                <h2>Control Ownership</h2>
+                <p>Control Owner: <span id="controlOwnerValue">-</span></p>
+                <p>Tracking Engine: <span id="trackingEngineValue">-</span></p>
+                <p>Conflict Status: <span id="conflictStatusValue">-</span></p>
+                <p>Control Policy: <span id="controlPolicyValue">-</span></p>
             </div>
 
             <div class="status-card">
