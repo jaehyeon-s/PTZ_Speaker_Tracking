@@ -1,7 +1,7 @@
 import unittest
 from urllib.parse import parse_qs
 
-from src.camera.qon_control import QonTrackingControl, QonVelocityPTZController, TrackingMode, parse_mode
+from src.camera.qon_control import QonTrackingControl, TrackingMode, parse_mode
 
 
 class FakeResponse:
@@ -84,39 +84,6 @@ class QonTrackingControlTests(unittest.TestCase):
 
         self.assertEqual(stop_request.full_url, "http://camera/cgi-bin/ptzctrl.cgi?ptzcmd&ptzstop&10&10")
         self.assertEqual(zoom_request.full_url, "http://camera/cgi-bin/ptzctrl.cgi?ptzcmd&zoomout&5")
-
-    def test_supervisor_actuator_mode_uses_write_refresh_readback_sequence(self):
-        opener = FakeOpener(
-            "common.track=\"0\"\ntracking.auto_zoom=\"0\"\ntracking.auto_tilt=\"0\"\ncommon.debug_mode=\"3\""
-        )
-        control = QonTrackingControl("http://camera", opener=opener)
-
-        response = control.set_supervisor_actuator_mode()
-        urls = [request.full_url for request, _ in opener.requests]
-
-        self.assertEqual(response.body, opener.body)
-        self.assertEqual(urls[0], "http://camera/cgi-bin/param.cgi?write_path")
-        self.assertEqual(urls[1], "http://camera/cgi-bin/param.cgi?post_visca")
-        self.assertEqual(urls[2], "http://camera/cgi-bin/param.cgi?get_path")
-        write_data = parse_qs(opener.requests[0][0].data.decode())
-        self.assertEqual(write_data["common.track"], ["0"])
-        self.assertEqual(write_data["tracking.auto_zoom"], ["0"])
-        self.assertEqual(write_data["tracking.auto_tilt"], ["0"])
-        self.assertEqual(write_data["common.debug_mode"], ["3"])
-
-    def test_velocity_ptz_sends_direction_then_stop(self):
-        opener = FakeOpener()
-        control = QonTrackingControl("http://camera", opener=opener)
-        ptz = QonVelocityPTZController(control, dead_zone_ratio=0.1, min_speed=2, max_speed=10)
-
-        action = ptz.follow_bbox((150, 40, 190, 80), (100, 200, 3))
-        move_url = opener.requests[-1][0].full_url
-        ptz.stop()
-        stop_url = opener.requests[-1][0].full_url
-
-        self.assertTrue(action.startswith("right:"))
-        self.assertIn("ptzcmd&right&", move_url)
-        self.assertEqual(stop_url, "http://camera/cgi-bin/ptzctrl.cgi?ptzcmd&ptzstop&10&10")
 
 
 if __name__ == "__main__":

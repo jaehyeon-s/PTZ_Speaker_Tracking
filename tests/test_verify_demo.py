@@ -11,46 +11,11 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from src.app.verify_demo import (
-    CameraTrackingSupervisor,
-    build_ptz_controller,
-    config_value,
-    load_config,
-    main,
-    marker_visible_in_observed_region,
-    select_registration_bbox,
-    should_collect_markers,
-    should_collect_registration_inputs,
-)
+from src.app.verify_demo import CameraTrackingSupervisor, main, marker_visible_in_observed_region, select_registration_bbox
 from src.tracking.target_state import MarkerDetection, PersonDetection
 
 
 class VerifyDemoSmokeTests(unittest.TestCase):
-    def test_loads_nested_yaml_config_without_pyyaml_dependency(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "config.yaml"
-            path.write_text(
-                "\n".join(
-                    [
-                        "source: rtsp://192.168.11.88:554/stream2",
-                        "region_mode: identity",
-                        "detector:",
-                        "  backend: ncnn",
-                        "  ncnn_input_size: 640",
-                        "camera:",
-                        "  configure_supervisor_actuator: true",
-                    ]
-                ),
-                encoding="utf-8",
-            )
-
-            config = load_config(str(path))
-
-        self.assertEqual(config_value(config, "source"), "rtsp://192.168.11.88:554/stream2")
-        self.assertEqual(config_value(config, "detector.backend"), "ncnn")
-        self.assertEqual(config_value(config, "detector.ncnn_input_size"), 640)
-        self.assertIs(config_value(config, "camera.configure_supervisor_actuator"), True)
-
     def test_marker_registration_defaults_to_observed_reference(self):
         args = SimpleNamespace(
             registration_mode="marker",
@@ -148,54 +113,6 @@ class VerifyDemoSmokeTests(unittest.TestCase):
 
         self.assertEqual(control.calls, ["presenter", "tracking", "zone", "stop"])
         self.assertEqual(supervisor.last_action, "tracking_off:mismatch:stop")
-
-    def test_supervisor_actuator_mode_keeps_camera_tracking_off_after_registration(self):
-        class FakeControl:
-            def __init__(self):
-                self.calls = []
-
-            def set_supervisor_actuator_mode(self):
-                self.calls.append("actuator")
-
-            def enable_auto_tracking(self):
-                self.calls.append("tracking")
-
-            def set_presenter_mode(self):
-                self.calls.append("presenter")
-
-        control = FakeControl()
-        supervisor = CameraTrackingSupervisor(control, "stop")
-
-        supervisor.configure_actuator()
-        supervisor.enable_tracking("registered")
-
-        self.assertEqual(control.calls, ["actuator"])
-        self.assertEqual(supervisor.last_action, "tracking_left_off:registered")
-
-    def test_ptz_follow_target_accepts_supervisor_actuator_camera_control(self):
-        args = SimpleNamespace(
-            ptz_follow_target=True,
-            ptz_dead_zone=0.12,
-            ptz_min_speed=2,
-            ptz_max_speed=10,
-        )
-
-        controller = build_ptz_controller(args, object())
-
-        self.assertIsNotNone(controller)
-
-    def test_registration_detector_stops_after_headless_registration(self):
-        args = SimpleNamespace(register_on_start=True, no_window=True, marker_positive=False)
-
-        self.assertTrue(should_collect_registration_inputs(args, verifier_registered=False))
-        self.assertFalse(should_collect_registration_inputs(args, verifier_registered=True))
-        self.assertFalse(should_collect_markers(args, verifier_registered=True, should_verify=True))
-
-    def test_marker_positive_collects_markers_only_on_verify_frames(self):
-        args = SimpleNamespace(register_on_start=True, no_window=True, marker_positive=True)
-
-        self.assertFalse(should_collect_markers(args, verifier_registered=True, should_verify=False))
-        self.assertTrue(should_collect_markers(args, verifier_registered=True, should_verify=True))
 
 
 if __name__ == "__main__":

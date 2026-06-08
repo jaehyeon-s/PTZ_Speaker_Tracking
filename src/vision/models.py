@@ -10,8 +10,6 @@ BBox = tuple[int, int, int, int]  # x1, y1, x2, y2
 class TrackingState(str, Enum):
     UNREGISTERED = "UNREGISTERED"
     VERIFIED = "VERIFIED"
-    HOLD = "HOLD"
-    CAMERA_ALIGNED = "CAMERA_ALIGNED"
     SUSPECT = "SUSPECT"
     MISMATCH = "MISMATCH"
     NO_REGION = "NO_REGION"
