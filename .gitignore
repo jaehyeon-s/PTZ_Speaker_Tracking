@@ -29,6 +29,8 @@ models/*.param
 
 # Logs
 logs/*.log
+logs/*.csv
+logs/*.mp4
 
 # Config overrides
 configs/local.yaml
