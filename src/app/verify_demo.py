@@ -36,12 +36,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--detector",
         choices=("hog", "opencv-yolo", "ncnn", "manual"),
-        default="hog",
-        help="Person detector used for marker/gesture registration",
+        default="ncnn",
+        help="Person detector used for registration and identity observations",
     )
     parser.add_argument("--yolo-model", default=None, help="Optional YOLO ONNX model path")
-    parser.add_argument("--ncnn-param", default=None, help="NCNN .param path")
-    parser.add_argument("--ncnn-bin", default=None, help="NCNN .bin path")
+    parser.add_argument("--ncnn-param", default="models/yolo.param", help="NCNN YOLO .param path")
+    parser.add_argument("--ncnn-bin", default="models/yolo.bin", help="NCNN YOLO .bin path")
     parser.add_argument("--ncnn-input-size", type=int, default=640)
     parser.add_argument("--person-box", default=None, help="Manual detector bbox x,y,w,h")
     parser.add_argument("--conf-threshold", type=float, default=0.35)

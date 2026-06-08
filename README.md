@@ -8,7 +8,7 @@ Qon PTZ 카메라를 단순 PTZ actuator처럼 운용하고, Raspberry Pi 쪽에
 
 ```text
 Qon RTSP stream2
-  -> Pi person detector
+  -> Pi NCNN YOLO person detector
   -> marker/gesture 기반 발표자 등록
   -> identity-first Re-ID로 target bbox 선택
   -> Pi가 Qon HTTP PTZ 명령으로 직접 pan/tilt 제어
@@ -65,7 +65,8 @@ center crop이나 center-nearest person을 주 신호로 쓰지 않습니다. �
 틀린 사람을 중앙에 둘 때 center 기반 방식도 같이 틀리기 때문입니다.
 
 `IdentityMatchedRegionProvider`는 프레임 전체 사람 후보를 모두 보고, 등록된
-발표자 Re-ID feature와 가장 가까운 후보를 observed bbox로 선택합니다.
+발표자 Re-ID feature와 가장 가까운 후보를 observed bbox로 선택합니다. 기본
+사람 detector는 NCNN YOLO입니다.
 
 판정은 두 단계입니다.
 
@@ -114,6 +115,8 @@ export QON_PASS='camera-password'
 python3 -m src.app.verify_demo \
   --source "rtsp://192.168.11.88:554/stream2" \
   --region-mode identity \
+  --ncnn-param models/yolo.param \
+  --ncnn-bin models/yolo.bin \
   --register-on-start \
   --registration-mode marker \
   --registration-reference selected \
@@ -132,6 +135,8 @@ python3 -m src.app.verify_demo \
 ```bash
 python3 main.py \
   --source "rtsp://192.168.11.88:554/stream2" \
+  --ncnn-param models/yolo.param \
+  --ncnn-bin models/yolo.bin \
   --target-marker-id 7 \
   --log-csv logs/marker_reid.csv
 ```
@@ -141,6 +146,8 @@ python3 main.py \
 ```bash
 python3 main.py \
   --source "rtsp://192.168.11.88:554/stream2" \
+  --ncnn-param models/yolo.param \
+  --ncnn-bin models/yolo.bin \
   --target-marker-id 7 \
   --gesture
 ```
@@ -149,6 +156,9 @@ python3 main.py \
 
 | 옵션 | 설명 |
 |---|---|
+| `--detector ncnn` | 기본 detector. NCNN YOLO 모델 사용 |
+| `--ncnn-param models/yolo.param` | NCNN YOLO param 파일 |
+| `--ncnn-bin models/yolo.bin` | NCNN YOLO bin 파일 |
 | `--region-mode identity` | detector + Re-ID로 observed bbox 선택 |
 | `--identity-weak-min-score` | 관측 신뢰 최소 score. 실패 시 HOLD |
 | `--identity-margin` | best 후보와 second 후보의 최소 score 차이 |
@@ -161,6 +171,10 @@ python3 main.py \
 | `--registration-mode marker` | ArUco marker로 발표자 등록 |
 | `--registration-mode gesture` | MediaPipe 손들기 후보로 발표자 등록 |
 | `--registration-mode marker-or-gesture` | marker 우선, 없으면 gesture |
+
+기본 실행은 `--detector ncnn`으로 동작합니다. 따라서 실험 전 `models/yolo.param`,
+`models/yolo.bin`을 준비해야 합니다. 모델이 없을 때만 임시 smoke test 용도로
+`--detector hog`를 명시해 사용할 수 있습니다.
 
 ## 프로젝트 구조
 
