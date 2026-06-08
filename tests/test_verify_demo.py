@@ -11,11 +11,43 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from src.app.verify_demo import CameraTrackingSupervisor, main, marker_visible_in_observed_region, select_registration_bbox
+from src.app.verify_demo import (
+    CameraTrackingSupervisor,
+    config_value,
+    load_config,
+    main,
+    marker_visible_in_observed_region,
+    select_registration_bbox,
+)
 from src.tracking.target_state import MarkerDetection, PersonDetection
 
 
 class VerifyDemoSmokeTests(unittest.TestCase):
+    def test_loads_nested_yaml_config_without_pyyaml_dependency(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                "\n".join(
+                    [
+                        "source: rtsp://192.168.11.88:554/stream2",
+                        "region_mode: identity",
+                        "detector:",
+                        "  backend: ncnn",
+                        "  ncnn_input_size: 640",
+                        "camera:",
+                        "  configure_supervisor_actuator: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(str(path))
+
+        self.assertEqual(config_value(config, "source"), "rtsp://192.168.11.88:554/stream2")
+        self.assertEqual(config_value(config, "detector.backend"), "ncnn")
+        self.assertEqual(config_value(config, "detector.ncnn_input_size"), 640)
+        self.assertIs(config_value(config, "camera.configure_supervisor_actuator"), True)
+
     def test_marker_registration_defaults_to_observed_reference(self):
         args = SimpleNamespace(
             registration_mode="marker",

@@ -112,22 +112,16 @@ python3 -m pip install mediapipe
 cd PTZ_Speaker_Tracking
 export QON_PASS='camera-password'
 
+python3 -m src.app.verify_demo --config configs/qon_mvpv3.yaml
+```
+
+현장에서 값만 바꿀 때는 config 파일을 수정하거나 필요한 옵션만 CLI로 override합니다.
+
+```bash
 python3 -m src.app.verify_demo \
-  --source "rtsp://192.168.11.88:554/stream2" \
-  --region-mode identity \
-  --ncnn-param models/yolo.param \
-  --ncnn-bin models/yolo.bin \
-  --register-on-start \
-  --registration-mode marker \
-  --registration-reference selected \
-  --target-marker-id 7 \
-  --camera-url "http://192.168.11.88" \
-  --camera-username "admin" \
-  --camera-password-env QON_PASS \
-  --camera-auth-mode digest \
-  --configure-supervisor-actuator \
-  --ptz-follow-target \
-  --log-csv logs/identity_supervisor.csv
+  --config configs/qon_mvpv3.yaml \
+  --identity-margin 0.12 \
+  --ptz-max-speed 8
 ```
 
 ### marker + Re-ID 직접 추적 fallback
@@ -156,6 +150,7 @@ python3 main.py \
 
 | 옵션 | 설명 |
 |---|---|
+| `--config configs/qon_mvpv3.yaml` | 권장 실행 설정 파일 |
 | `--detector ncnn` | 기본 detector. NCNN YOLO 모델 사용 |
 | `--ncnn-param models/yolo.param` | NCNN YOLO param 파일 |
 | `--ncnn-bin models/yolo.bin` | NCNN YOLO bin 파일 |
@@ -183,6 +178,7 @@ PTZ_Speaker_Tracking/
 ├── main.py
 ├── requirements.txt
 ├── configs/
+│   └── qon_mvpv3.yaml
 ├── logs/
 ├── models/
 ├── src/
