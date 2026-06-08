@@ -5,6 +5,7 @@ detector:
   backend: ncnn
   ncnn_param: models/yolo.param
   ncnn_bin: models/yolo.bin
+  # YOLO model input size. This is not the RTSP frame size; stream2 is 640x360.
   ncnn_input_size: 640
   conf_threshold: 0.35
   nms_threshold: 0.45

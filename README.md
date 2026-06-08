@@ -106,7 +106,7 @@ python3 -m pip install mediapipe
 
 ## 실행
 
-### 권장 실행: Qon stream2 + identity supervisor + 직접 PTZ 제어
+### 권장 실행
 
 ```bash
 cd PTZ_Speaker_Tracking
@@ -115,7 +115,9 @@ export QON_PASS='camera-password'
 python3 -m src.app.verify_demo --config configs/qon_mvpv3.yaml
 ```
 
-현장에서 값만 바꿀 때는 config 파일을 수정하거나 필요한 옵션만 CLI로 override합니다.
+이 명령이 기본 데모 실행입니다. 세부 값은 `configs/qon_mvpv3.yaml`에서 관리합니다.
+
+현장에서 일부 값만 바꿀 때는 필요한 옵션만 CLI로 override합니다.
 
 ```bash
 python3 -m src.app.verify_demo \
@@ -124,26 +126,26 @@ python3 -m src.app.verify_demo \
   --ptz-max-speed 8
 ```
 
-### marker + Re-ID 직접 추적 fallback
+### NCNN 입력 크기
 
-```bash
-python3 main.py \
-  --source "rtsp://192.168.11.88:554/stream2" \
-  --ncnn-param models/yolo.param \
-  --ncnn-bin models/yolo.bin \
-  --target-marker-id 7 \
-  --log-csv logs/marker_reid.csv
+`stream2`의 영상 해상도는 640x360입니다. 하지만 `ncnn_input_size: 640`은
+RTSP 프레임 해상도가 아니라 YOLO 모델의 square 입력 크기입니다.
+
+```text
+RTSP frame: 640x360
+YOLO/NCNN model input: 640x640
 ```
 
-### MediaPipe gesture fallback 포함
+따라서 `(640, 360)`으로 설정하는 값이 아닙니다. 모델이 640 입력으로 export된
+경우 `ncnn_input_size: 640`을 유지합니다.
+
+### fallback 실행
+
+기본 데모는 `verify_demo.py --config`입니다. `main.py`는 marker-first 직접 추적
+비교용으로만 남겨둡니다.
 
 ```bash
-python3 main.py \
-  --source "rtsp://192.168.11.88:554/stream2" \
-  --ncnn-param models/yolo.param \
-  --ncnn-bin models/yolo.bin \
-  --target-marker-id 7 \
-  --gesture
+python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 7
 ```
 
 ## 주요 옵션
@@ -232,5 +234,5 @@ python3 -m src.app.verify_demo --help
 현재 확인:
 
 ```text
-Ran 23 tests OK
+Ran 24 tests OK
 ```

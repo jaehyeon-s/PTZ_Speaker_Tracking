@@ -67,7 +67,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--yolo-model", default=config_value(config, "yolo_model", "detector.yolo_model"), help="Optional YOLO ONNX model path")
     parser.add_argument("--ncnn-param", default=config_value(config, "ncnn_param", "detector.ncnn_param", default="models/yolo.param"), help="NCNN YOLO .param path")
     parser.add_argument("--ncnn-bin", default=config_value(config, "ncnn_bin", "detector.ncnn_bin", default="models/yolo.bin"), help="NCNN YOLO .bin path")
-    parser.add_argument("--ncnn-input-size", type=int, default=config_value(config, "ncnn_input_size", "detector.ncnn_input_size", default=640))
+    parser.add_argument(
+        "--ncnn-input-size",
+        type=int,
+        default=config_value(config, "ncnn_input_size", "detector.ncnn_input_size", default=640),
+        help="Square YOLO model input size; stream2 frame size remains 640x360",
+    )
     parser.add_argument("--person-box", default=config_value(config, "person_box", "detector.person_box"), help="Manual detector bbox x,y,w,h")
     parser.add_argument("--conf-threshold", type=float, default=config_value(config, "conf_threshold", "detector.conf_threshold", default=0.35))
     parser.add_argument("--nms-threshold", type=float, default=config_value(config, "nms_threshold", "detector.nms_threshold", default=0.45))
