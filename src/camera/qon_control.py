@@ -6,6 +6,7 @@ import argparse
 import base64
 import os
 import re
+import time
 from dataclasses import dataclass
 from enum import IntEnum
 from urllib.parse import urlencode
@@ -20,6 +21,7 @@ from urllib.request import (
 
 
 TRACK_CONFIG_PATH = "/data/track.conf"
+TRACK_REFRESH_VISCA = [0x81, 0x0A, 0x01, 0x04, 0x1D, 0x17, 0xFF]
 
 
 class TrackingMode(IntEnum):
@@ -37,9 +39,9 @@ class QonTrackingControl:
     """Read and set the tracking/zone mode observed in the camera web UI.
 
     Network capture established that `/data/track.conf` uses
-    `common.track=1` for tracking and `common.track=0` for zone mode.
-    The additional captured VISCA posts occurred in both mode transitions and
-    are intentionally not sent here until their purpose is identified.
+    `common.track=1` for tracking and `common.track=0` for tracking off. Field
+    testing showed that settings requiring runtime application should be
+    followed by the captured VISCA refresh and verified by read-back.
     """
 
     def __init__(
@@ -76,6 +78,31 @@ class QonTrackingControl:
 
     def write_track_config(self, key: str, value: str | int) -> QonResponse:
         return self._post("write_path", {"cururl": "http://", "path": TRACK_CONFIG_PATH, key: str(value)})
+
+    def write_track_config_values(self, values: dict[str, str | int]) -> QonResponse:
+        payload = {"cururl": "http://", "path": TRACK_CONFIG_PATH}
+        payload.update({key: str(value) for key, value in values.items()})
+        return self._post("write_path", payload)
+
+    def refresh_tracking_runtime(self) -> QonResponse:
+        return self.post_visca(TRACK_REFRESH_VISCA)
+
+    def apply_track_config(self, values: dict[str, str | int], refresh: bool = True) -> QonResponse:
+        self.write_track_config_values(values)
+        if refresh:
+            self.refresh_tracking_runtime()
+        return self.read_track_config()
+
+    def set_supervisor_actuator_mode(self) -> QonResponse:
+        """Disable camera-owned tracking/PTZ motion for Pi supervisor control."""
+        return self.apply_track_config(
+            {
+                "common.track": 0,
+                "tracking.auto_zoom": 0,
+                "tracking.auto_tilt": 0,
+                "common.debug_mode": 3,
+            }
+        )
 
     def set_humanoid_frame(self, mode: int) -> QonResponse:
         """Set observed humanoid frame mode: 2=debug bbox, 3=off, 4=default."""
@@ -171,7 +198,20 @@ def main() -> int:
     parser.add_argument("--password-env", default=None, help="Environment variable holding camera password")
     parser.add_argument(
         "command",
-        choices=("status", "tracking", "zone", "stop", "home", "zoomout", "zoomin", "debug-bbox", "debug-off", "hint-on", "hint-off"),
+        choices=(
+            "status",
+            "tracking",
+            "zone",
+            "stop",
+            "home",
+            "zoomout",
+            "zoomin",
+            "debug-bbox",
+            "debug-off",
+            "hint-on",
+            "hint-off",
+            "supervisor-actuator",
+        ),
     )
     args = parser.parse_args()
     password = os.environ.get(args.password_env) if args.password_env else None
@@ -201,6 +241,8 @@ def main() -> int:
         response = client.set_humanoid_frame(3)
     elif args.command == "hint-on":
         response = client.set_tracking_hint(True)
+    elif args.command == "supervisor-actuator":
+        response = client.set_supervisor_actuator_mode()
     else:
         response = client.set_tracking_hint(False)
     print(f"HTTP {response.status}: requested {args.command} mode")
@@ -210,6 +252,69 @@ def main() -> int:
 def parse_mode(body: str) -> TrackingMode | None:
     match = re.search(r"common\.track\s*=\s*([01])", body)
     return TrackingMode(int(match.group(1))) if match else None
+
+
+class QonVelocityPTZController:
+    """Closed-loop PTZ driver for Qon's direction/speed command model."""
+
+    def __init__(
+        self,
+        control: QonTrackingControl,
+        dead_zone_ratio: float = 0.12,
+        min_speed: int = 2,
+        max_speed: int = 10,
+        command_ttl_seconds: float = 0.35,
+    ) -> None:
+        self.control = control
+        self.dead_zone_ratio = dead_zone_ratio
+        self.min_speed = min_speed
+        self.max_speed = max(min_speed, max_speed)
+        self.command_ttl_seconds = command_ttl_seconds
+        self.last_command = "ptzstop"
+        self.last_speed = 0
+        self.last_sent_at = 0.0
+
+    def follow_bbox(self, bbox: tuple[int, int, int, int] | None, frame_shape) -> str:
+        if bbox is None:
+            self.stop()
+            return "ptzstop"
+        command, speed = self._command_for_bbox(bbox, frame_shape)
+        if command == "ptzstop":
+            self.stop()
+            return command
+        now = time.monotonic()
+        if command != self.last_command or speed != self.last_speed or now - self.last_sent_at >= self.command_ttl_seconds:
+            self.control.ptz_command(command, speed, speed)
+            self.last_command = command
+            self.last_speed = speed
+            self.last_sent_at = now
+        return f"{command}:{speed}"
+
+    def stop(self) -> None:
+        if self.last_command != "ptzstop":
+            self.control.stop()
+        self.last_command = "ptzstop"
+        self.last_speed = 0
+        self.last_sent_at = time.monotonic()
+
+    def _command_for_bbox(self, bbox: tuple[int, int, int, int], frame_shape) -> tuple[str, int]:
+        frame_h, frame_w = frame_shape[:2]
+        x1, y1, x2, y2 = bbox
+        cx = (x1 + x2) / 2.0
+        cy = (y1 + y2) / 2.0
+        error_x = (cx - frame_w / 2.0) / max(frame_w / 2.0, 1.0)
+        error_y = (cy - frame_h / 2.0) / max(frame_h / 2.0, 1.0)
+        if abs(error_x) <= self.dead_zone_ratio and abs(error_y) <= self.dead_zone_ratio:
+            return "ptzstop", 0
+        if abs(error_x) >= abs(error_y):
+            direction = "right" if error_x > 0 else "left"
+            magnitude = abs(error_x)
+        else:
+            direction = "down" if error_y > 0 else "up"
+            magnitude = abs(error_y)
+        speed_span = self.max_speed - self.min_speed
+        scaled = min(1.0, max(0.0, (magnitude - self.dead_zone_ratio) / max(1.0 - self.dead_zone_ratio, 1e-6)))
+        return direction, int(round(self.min_speed + scaled * speed_span))
 
 
 if __name__ == "__main__":
