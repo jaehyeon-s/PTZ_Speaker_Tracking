@@ -13,11 +13,14 @@ import numpy as np
 
 from src.app.verify_demo import (
     CameraTrackingSupervisor,
+    build_ptz_controller,
     config_value,
     load_config,
     main,
     marker_visible_in_observed_region,
     select_registration_bbox,
+    should_collect_markers,
+    should_collect_registration_inputs,
 )
 from src.tracking.target_state import MarkerDetection, PersonDetection
 
@@ -168,6 +171,31 @@ class VerifyDemoSmokeTests(unittest.TestCase):
 
         self.assertEqual(control.calls, ["actuator"])
         self.assertEqual(supervisor.last_action, "tracking_left_off:registered")
+
+    def test_ptz_follow_target_accepts_supervisor_actuator_camera_control(self):
+        args = SimpleNamespace(
+            ptz_follow_target=True,
+            ptz_dead_zone=0.12,
+            ptz_min_speed=2,
+            ptz_max_speed=10,
+        )
+
+        controller = build_ptz_controller(args, object())
+
+        self.assertIsNotNone(controller)
+
+    def test_registration_detector_stops_after_headless_registration(self):
+        args = SimpleNamespace(register_on_start=True, no_window=True, marker_positive=False)
+
+        self.assertTrue(should_collect_registration_inputs(args, verifier_registered=False))
+        self.assertFalse(should_collect_registration_inputs(args, verifier_registered=True))
+        self.assertFalse(should_collect_markers(args, verifier_registered=True, should_verify=True))
+
+    def test_marker_positive_collects_markers_only_on_verify_frames(self):
+        args = SimpleNamespace(register_on_start=True, no_window=True, marker_positive=True)
+
+        self.assertFalse(should_collect_markers(args, verifier_registered=True, should_verify=False))
+        self.assertTrue(should_collect_markers(args, verifier_registered=True, should_verify=True))
 
 
 if __name__ == "__main__":

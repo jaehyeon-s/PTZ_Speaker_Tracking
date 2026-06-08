@@ -360,12 +360,13 @@ def main() -> int:
             frame_index += 1
             bbox, region_source = provider.region_for_frame(frame_index, frame)
             registered_this_frame = False
+            should_verify = frame_index == 1 or frame_index % max(1, args.verify_every_frames) == 0
 
             people = []
             markers = []
-            if registration_detector is not None and (args.register_on_start or not args.no_window):
+            if registration_detector is not None and should_collect_registration_inputs(args, verifier.registered):
                 people = registration_detector.detect(frame)
-            if marker_detector is not None and (args.register_on_start or not args.no_window):
+            if marker_detector is not None and should_collect_markers(args, verifier.registered, should_verify):
                 markers = marker_detector.detect(frame)
 
             if args.register_on_start and not verifier.registered:
@@ -389,7 +390,6 @@ def main() -> int:
                     supervisor.enable_tracking("registered")
                     registered_this_frame = True
 
-            should_verify = frame_index == 1 or frame_index % max(1, args.verify_every_frames) == 0
             if verifier.registered and should_verify and not registered_this_frame:
                 marker_verified = (
                     args.marker_positive
@@ -593,12 +593,22 @@ def build_ptz_controller(args, camera_control):
     if not args.ptz_follow_target:
         return None
     if camera_control is None:
-        raise ValueError("--ptz-follow-target requires --control-camera or --enable-camera-tracking-on-start")
+        raise ValueError("--ptz-follow-target requires camera control options and --camera-url")
     return QonVelocityPTZController(
         camera_control,
         dead_zone_ratio=args.ptz_dead_zone,
         min_speed=args.ptz_min_speed,
         max_speed=args.ptz_max_speed,
+    )
+
+
+def should_collect_registration_inputs(args, verifier_registered: bool) -> bool:
+    return (args.register_on_start and not verifier_registered) or not args.no_window
+
+
+def should_collect_markers(args, verifier_registered: bool, should_verify: bool) -> bool:
+    return should_collect_registration_inputs(args, verifier_registered) or (
+        args.marker_positive and verifier_registered and should_verify
     )
 
 
