@@ -468,7 +468,7 @@ def main() -> int:
                 )
                 log_file.flush()
 
-            draw_debug(cv2, frame, last_result, recovery_bbox, fps)
+            draw_debug(cv2, frame, last_result, bbox, region_source, recovery_bbox, ptz_action, fps)
             writer = write_video(cv2, writer, args.output, frame, video.fps())
             if not args.no_window:
                 cv2.imshow("Qon tracking Re-ID verifier", frame)
@@ -800,7 +800,20 @@ def print_status(frame_index, result, recovery_bbox, recovery_score, fps: float)
     print(message)
 
 
-def draw_debug(cv2, frame, result, recovery_bbox, fps: float) -> None:
+def draw_debug(cv2, frame, result, observed_bbox, observed_source, recovery_bbox, ptz_action: str, fps: float) -> None:
+    if observed_bbox is not None:
+        x1, y1, x2, y2 = observed_bbox
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 180, 40), 2)
+        cv2.putText(
+            frame,
+            f"observed {observed_source}",
+            (x1, max(45, y1 - 8)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 180, 40),
+            1,
+            cv2.LINE_AA,
+        )
     if result.bbox is not None:
         color = (0, 200, 0) if result.state is TrackingState.VERIFIED else (0, 0, 255)
         x1, y1, x2, y2 = result.bbox
@@ -808,7 +821,7 @@ def draw_debug(cv2, frame, result, recovery_bbox, fps: float) -> None:
     if recovery_bbox is not None:
         x1, y1, x2, y2 = recovery_bbox
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
-    text = f"{result.state.value} {result.event} score={result.score:.2f} src={result.source} fps={fps:.1f}"
+    text = f"{result.state.value} {result.event} score={result.score:.2f} src={result.source} ptz={ptz_action or '-'} fps={fps:.1f}"
     cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 0, 0), 3)
     cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 1)
 
