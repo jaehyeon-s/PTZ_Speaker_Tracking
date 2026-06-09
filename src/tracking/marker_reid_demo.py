@@ -28,8 +28,8 @@ def parse_args() -> argparse.Namespace:
         help="Person detector backend",
     )
     parser.add_argument("--yolo-model", default=None, help="Optional YOLO ONNX model path")
-    parser.add_argument("--ncnn-param", default="models/yolo.param", help="NCNN YOLO .param path")
-    parser.add_argument("--ncnn-bin", default="models/yolo.bin", help="NCNN YOLO .bin path")
+    parser.add_argument("--ncnn-param", default="models/yolo26n_ncnn_model/model.ncnn.param", help="NCNN YOLO .param path")
+    parser.add_argument("--ncnn-bin", default="models/yolo26n_ncnn_model/model.ncnn.bin", help="NCNN YOLO .bin path")
     parser.add_argument(
         "--ncnn-input-size",
         type=int,

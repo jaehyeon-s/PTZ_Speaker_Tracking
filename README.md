@@ -154,8 +154,8 @@ python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 0
 |---|---|
 | `--config configs/qon_mvpv3.yaml` | 권장 실행 설정 파일 |
 | `--detector ncnn` | 기본 detector. NCNN YOLO 모델 사용 |
-| `--ncnn-param models/yolo.param` | NCNN YOLO param 파일 |
-| `--ncnn-bin models/yolo.bin` | NCNN YOLO bin 파일 |
+| `--ncnn-param models/yolo26n_ncnn_model/model.ncnn.param` | NCNN YOLO26n param 파일 |
+| `--ncnn-bin models/yolo26n_ncnn_model/model.ncnn.bin` | NCNN YOLO26n bin 파일 |
 | `--region-mode identity` | detector + Re-ID로 observed bbox 선택 |
 | `--identity-weak-min-score` | 관측 신뢰 최소 score. 실패 시 HOLD |
 | `--identity-margin` | best 후보와 second 후보의 최소 score 차이 |
@@ -169,9 +169,16 @@ python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 0
 | `--registration-mode gesture` | MediaPipe 손들기 후보로 발표자 등록 |
 | `--registration-mode marker-or-gesture` | marker 우선, 없으면 gesture |
 
-기본 실행은 `--detector ncnn`으로 동작합니다. 따라서 실험 전 `models/yolo.param`,
-`models/yolo.bin`을 준비해야 합니다. 모델이 없을 때만 임시 smoke test 용도로
-`--detector hog`를 명시해 사용할 수 있습니다.
+기본 실행은 `--detector ncnn`으로 동작합니다. 따라서 실험 전 YOLO26n을
+Ultralytics NCNN export로 변환해 다음 파일을 준비해야 합니다.
+
+```text
+models/yolo26n_ncnn_model/model.ncnn.param
+models/yolo26n_ncnn_model/model.ncnn.bin
+```
+
+모델이 없을 때만 임시 smoke test 용도로 `--detector hog`를 명시해 사용할 수
+있습니다.
 
 ## 프로젝트 구조
 
