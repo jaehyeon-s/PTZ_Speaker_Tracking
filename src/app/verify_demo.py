@@ -73,6 +73,16 @@ def parse_args() -> argparse.Namespace:
         default=config_value(config, "ncnn_input_size", "detector.ncnn_input_size", default=640),
         help="Square YOLO model input size; stream2 frame size remains 640x360",
     )
+    parser.add_argument(
+        "--ncnn-input-name",
+        default=config_value(config, "ncnn_input_name", "detector.ncnn_input_name", default="in0"),
+        help="NCNN input blob name",
+    )
+    parser.add_argument(
+        "--ncnn-output-names",
+        default=config_value(config, "ncnn_output_names", "detector.ncnn_output_names", default="out0"),
+        help="Comma-separated NCNN output blob names to try",
+    )
     parser.add_argument("--person-box", default=config_value(config, "person_box", "detector.person_box"), help="Manual detector bbox x,y,w,h")
     parser.add_argument("--conf-threshold", type=float, default=config_value(config, "conf_threshold", "detector.conf_threshold", default=0.35))
     parser.add_argument("--nms-threshold", type=float, default=config_value(config, "nms_threshold", "detector.nms_threshold", default=0.45))
@@ -502,6 +512,8 @@ def build_region_provider(args, matcher):
             ncnn_param=args.ncnn_param,
             ncnn_bin=args.ncnn_bin,
             ncnn_input_size=args.ncnn_input_size,
+            ncnn_input_name=args.ncnn_input_name,
+            ncnn_output_names=parse_output_names(args.ncnn_output_names),
             conf_threshold=args.conf_threshold,
             nms_threshold=args.nms_threshold,
             debug_detector=args.debug_detector,
@@ -638,6 +650,8 @@ def build_registration_detector(args):
         ncnn_param=args.ncnn_param,
         ncnn_bin=args.ncnn_bin,
         ncnn_input_size=args.ncnn_input_size,
+        ncnn_input_name=args.ncnn_input_name,
+        ncnn_output_names=parse_output_names(args.ncnn_output_names),
         conf_threshold=args.conf_threshold,
         nms_threshold=args.nms_threshold,
         debug_detector=args.debug_detector,
@@ -735,6 +749,16 @@ def parse_xywh(value: str | None) -> tuple[int, int, int, int] | None:
     if len(parts) != 4:
         raise ValueError("--person-box must be x,y,w,h")
     return parts
+
+
+def parse_output_names(value) -> tuple[str, ...]:
+    if isinstance(value, str):
+        names = tuple(part.strip() for part in value.split(",") if part.strip())
+        return names or ("out0",)
+    if isinstance(value, (list, tuple)):
+        names = tuple(str(part).strip() for part in value if str(part).strip())
+        return names or ("out0",)
+    return ("out0",)
 
 
 def format_bbox(bbox: BBox | None) -> str:

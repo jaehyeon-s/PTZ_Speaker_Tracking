@@ -177,6 +177,10 @@ models/yolo26n_ncnn_model/model.ncnn.param
 models/yolo26n_ncnn_model/model.ncnn.bin
 ```
 
+Ultralytics NCNN export의 기본 blob 이름은 보통 `in0`/`out0`입니다. 다른 이름으로
+export된 모델이면 `configs/qon_mvpv3.yaml`의 `ncnn_input_name`,
+`ncnn_output_names`를 맞춥니다.
+
 모델이 없을 때만 임시 smoke test 용도로 `--detector hog`를 명시해 사용할 수
 있습니다.
 

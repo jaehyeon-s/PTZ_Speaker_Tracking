@@ -38,6 +38,8 @@ class VerifyDemoSmokeTests(unittest.TestCase):
                         "detector:",
                         "  backend: ncnn",
                         "  ncnn_input_size: 640",
+                        "  ncnn_input_name: in0",
+                        "  ncnn_output_names: out0",
                         "camera:",
                         "  configure_supervisor_actuator: true",
                     ]
@@ -50,6 +52,8 @@ class VerifyDemoSmokeTests(unittest.TestCase):
         self.assertEqual(config_value(config, "source"), "rtsp://192.168.11.88:554/stream2")
         self.assertEqual(config_value(config, "detector.backend"), "ncnn")
         self.assertEqual(config_value(config, "detector.ncnn_input_size"), 640)
+        self.assertEqual(config_value(config, "detector.ncnn_input_name"), "in0")
+        self.assertEqual(config_value(config, "detector.ncnn_output_names"), "out0")
         self.assertIs(config_value(config, "camera.configure_supervisor_actuator"), True)
 
     def test_parse_args_reads_nested_detector_backend_from_config(self):
@@ -74,6 +78,8 @@ class VerifyDemoSmokeTests(unittest.TestCase):
         self.assertEqual(args.detector, "ncnn")
         self.assertEqual(args.ncnn_param, "models/yolo26n_ncnn_model/model.ncnn.param")
         self.assertEqual(args.ncnn_bin, "models/yolo26n_ncnn_model/model.ncnn.bin")
+        self.assertEqual(args.ncnn_input_name, "in0")
+        self.assertEqual(args.ncnn_output_names, "out0")
 
     def test_marker_registration_defaults_to_observed_reference(self):
         args = SimpleNamespace(

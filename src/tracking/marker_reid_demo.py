@@ -36,6 +36,8 @@ def parse_args() -> argparse.Namespace:
         default=640,
         help="Square YOLO model input size; stream2 frame size remains 640x360",
     )
+    parser.add_argument("--ncnn-input-name", default="in0", help="NCNN input blob name")
+    parser.add_argument("--ncnn-output-names", default="out0", help="Comma-separated NCNN output blob names to try")
     parser.add_argument("--conf-threshold", type=float, default=0.35, help="Person confidence threshold")
     parser.add_argument("--nms-threshold", type=float, default=0.45, help="NMS threshold for detector adapters")
     parser.add_argument("--debug-detector", action="store_true", help="Print NCNN detector debug output")
@@ -101,6 +103,8 @@ def main() -> int:
         ncnn_param=args.ncnn_param,
         ncnn_bin=args.ncnn_bin,
         ncnn_input_size=args.ncnn_input_size,
+        ncnn_input_name=args.ncnn_input_name,
+        ncnn_output_names=tuple(part.strip() for part in args.ncnn_output_names.split(",") if part.strip()),
         conf_threshold=args.conf_threshold,
         nms_threshold=args.nms_threshold,
         debug_detector=args.debug_detector,
