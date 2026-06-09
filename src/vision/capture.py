@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 
 class VideoSource:
     def __init__(self, source: str, rtsp_drop_frames: int = 0) -> None:
@@ -12,6 +14,7 @@ class VideoSource:
         self.rtsp_drop_frames = max(0, rtsp_drop_frames)
         parsed_source = int(source) if source.isdigit() else source
         if source.lower().startswith("rtsp://"):
+            os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|max_delay;500000")
             self.capture = cv2.VideoCapture(parsed_source, cv2.CAP_FFMPEG)
             self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         else:

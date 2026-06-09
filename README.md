@@ -163,6 +163,7 @@ python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 0
 | `--identity-hold-limit` | HOLD가 LOST로 바뀌기 전 프레임 수 |
 | `--configure-supervisor-actuator` | Qon 내부 tracking/auto PTZ/debug burn-in off |
 | `--ptz-follow-target` | identity-selected bbox를 향해 Qon PTZ 직접 제어 |
+| `--rtsp-drop-frames` | RTSP 지연 완화를 위해 처리 전 버릴 frame 수 |
 | `--reid-backend hsv` | HSV baseline Re-ID |
 | `--reid-backend onnx --reid-model ...` | OSNet-style ONNX Re-ID |
 | `--registration-mode marker` | ArUco marker로 발표자 등록 |
@@ -183,6 +184,10 @@ export된 모델이면 `configs/qon_mvpv3.yaml`의 `ncnn_input_name`,
 
 모델이 없을 때만 임시 smoke test 용도로 `--detector hog`를 명시해 사용할 수
 있습니다.
+
+실행 로그와 CSV에는 처리 FPS가 함께 기록됩니다. Pi에서 화면 잔상이 심하면
+우선 `video.rtsp_drop_frames`를 늘리고, 그 다음 `ncnn_input_size`를 416으로
+낮춰 detector 부하를 확인합니다.
 
 ## 프로젝트 구조
 

@@ -108,6 +108,7 @@ class NCNNPersonDetector(PersonDetector):
         self.debug_detector = debug_detector
         self.debug_frames = debug_frames
         self._debug_frame_count = 0
+        self._debug_warnings: set[str] = set()
         self._last_output_shapes: dict[str, tuple[int, ...]] = {}
         self.net = ncnn.Net()
 
@@ -130,19 +131,22 @@ class NCNNPersonDetector(PersonDetector):
                 self.nms_threshold,
             )
         else:
-            # TODO: Replace this generic parser with the existing project NCNN YOLO
-            # decode logic if the NCNN export uses anchors/strides, multiple heads,
-            # or another output layout. The generic path expects rows shaped like
-            # [x1, y1, x2, y2, score, class_id] or dict/object equivalents.
-            detections = detections_to_person_detections(
+            detections = _parse_yolo_ncnn_output(
                 raw_output,
-                bbox_format="xyxy",
-                confidence_threshold=self.confidence_threshold,
+                frame.shape,
+                self.input_size,
+                self.confidence_threshold,
             )
+            if not detections:
+                detections = detections_to_person_detections(
+                    raw_output,
+                    bbox_format="xyxy",
+                    confidence_threshold=self.confidence_threshold,
+                )
             detections = nms_person_detections(detections, self.nms_threshold)
 
         if not detections:
-            self._debug_warn("NCNN output may not match generic parser")
+            self._debug_warn("NCNN output may not match YOLO parser")
         detections = self._clamp_detections(detections, frame.shape)
         self._debug_frame(raw_output, detections)
         return detections
@@ -223,7 +227,8 @@ class NCNNPersonDetector(PersonDetector):
             )
 
     def _debug_warn(self, message: str) -> None:
-        if self.debug_detector:
+        if self.debug_detector and message not in self._debug_warnings:
+            self._debug_warnings.add(message)
             print(f"[NCNN WARNING] {message}")
 
 
@@ -374,6 +379,54 @@ def detections_to_person_detections(
         if bbox is None:
             continue
         detections.append(PersonDetection(bbox=bbox, confidence=confidence))
+    return detections
+
+
+def _parse_yolo_ncnn_output(
+    raw_output: Any,
+    frame_shape: tuple[int, int, int],
+    input_size: int,
+    confidence_threshold: float,
+) -> List[PersonDetection]:
+    """Parse Ultralytics YOLO NCNN detect tensors.
+
+    Common exports return a tensor shaped like (classes + 4, anchors) or
+    (anchors, classes + 4), where the first four values are xywh in resized
+    square input coordinates and class 0 is the person score for COCO models.
+    """
+    output = np.asarray(raw_output, dtype=np.float32).squeeze()
+    if output.ndim != 2:
+        return []
+    if output.shape[0] >= 5 and output.shape[0] < output.shape[1]:
+        rows = output.T
+    elif output.shape[1] >= 5:
+        rows = output
+    else:
+        return []
+
+    frame_h, frame_w = frame_shape[:2]
+    scale_x = frame_w / max(float(input_size), 1.0)
+    scale_y = frame_h / max(float(input_size), 1.0)
+    detections: List[PersonDetection] = []
+    for row in rows:
+        if row.shape[0] < 5:
+            continue
+        class_scores = row[4:]
+        class_id = int(np.argmax(class_scores))
+        if class_id != 0:
+            continue
+        confidence = float(class_scores[class_id])
+        if confidence < confidence_threshold:
+            continue
+
+        cx, cy, width, height = (float(value) for value in row[:4])
+        x1 = int(round((cx - width / 2.0) * scale_x))
+        y1 = int(round((cy - height / 2.0) * scale_y))
+        box_w = int(round(width * scale_x))
+        box_h = int(round(height * scale_y))
+        if box_w <= 0 or box_h <= 0:
+            continue
+        detections.append(PersonDetection((x1, y1, box_w, box_h), confidence))
     return detections
 
 

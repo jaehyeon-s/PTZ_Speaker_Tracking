@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -358,16 +359,19 @@ def main() -> int:
                 "hold_count",
                 "mismatch_count",
                 "ptz_action",
+                "fps",
             ]
         )
 
     frame_index = 0
+    fps_meter = FpsMeter()
     try:
         while True:
             ok, frame = video.read()
             if not ok:
                 break
             frame_index += 1
+            fps = fps_meter.tick()
             bbox, region_source = provider.region_for_frame(frame_index, frame)
             registered_this_frame = False
             should_verify = frame_index == 1 or frame_index % max(1, args.verify_every_frames) == 0
@@ -425,7 +429,7 @@ def main() -> int:
                         )
                 if last_result.event in ("PRESENTER_MISMATCH", "PRESENTER_MISTRACK_CONFIRMED"):
                     supervisor.confirm_mismatch()
-                print_status(frame_index, last_result, recovery_bbox, recovery_score)
+                print_status(frame_index, last_result, recovery_bbox, recovery_score, fps)
 
             ptz_action = ""
             if ptz_controller is not None and verifier.registered:
@@ -457,11 +461,12 @@ def main() -> int:
                         int(get_identity_metric(provider, "hold_count")),
                         int(get_identity_metric(provider, "mismatch_count")),
                         ptz_action,
+                        f"{fps:.2f}",
                     ]
                 )
                 log_file.flush()
 
-            draw_debug(cv2, frame, last_result, recovery_bbox)
+            draw_debug(cv2, frame, last_result, recovery_bbox, fps)
             writer = write_video(cv2, writer, args.output, frame, video.fps())
             if not args.no_window:
                 cv2.imshow("Qon tracking Re-ID verifier", frame)
@@ -765,17 +770,35 @@ def format_bbox(bbox: BBox | None) -> str:
     return "" if bbox is None else ",".join(str(value) for value in bbox)
 
 
-def print_status(frame_index, result, recovery_bbox, recovery_score) -> None:
+class FpsMeter:
+    def __init__(self, smoothing: float = 0.9) -> None:
+        self.smoothing = smoothing
+        self._last_time: float | None = None
+        self._fps = 0.0
+
+    def tick(self) -> float:
+        now = time.monotonic()
+        if self._last_time is None:
+            self._last_time = now
+            return self._fps
+        elapsed = max(now - self._last_time, 1e-6)
+        self._last_time = now
+        current = 1.0 / elapsed
+        self._fps = current if self._fps <= 0.0 else self._fps * self.smoothing + current * (1.0 - self.smoothing)
+        return self._fps
+
+
+def print_status(frame_index, result, recovery_bbox, recovery_score, fps: float) -> None:
     message = (
         f"frame={frame_index} state={result.state.value} event={result.event} "
-        f"score={result.score:.3f} source={result.source}"
+        f"score={result.score:.3f} source={result.source} fps={fps:.2f}"
     )
     if recovery_bbox is not None:
         message += f" recovery_bbox={format_bbox(recovery_bbox)} recovery_score={recovery_score:.3f}"
     print(message)
 
 
-def draw_debug(cv2, frame, result, recovery_bbox) -> None:
+def draw_debug(cv2, frame, result, recovery_bbox, fps: float) -> None:
     if result.bbox is not None:
         color = (0, 200, 0) if result.state is TrackingState.VERIFIED else (0, 0, 255)
         x1, y1, x2, y2 = result.bbox
@@ -783,7 +806,7 @@ def draw_debug(cv2, frame, result, recovery_bbox) -> None:
     if recovery_bbox is not None:
         x1, y1, x2, y2 = recovery_bbox
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
-    text = f"{result.state.value} {result.event} score={result.score:.2f} src={result.source}"
+    text = f"{result.state.value} {result.event} score={result.score:.2f} src={result.source} fps={fps:.1f}"
     cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 0, 0), 3)
     cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 1)
 

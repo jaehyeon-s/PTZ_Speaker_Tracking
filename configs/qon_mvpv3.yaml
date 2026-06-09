@@ -1,6 +1,10 @@
 source: rtsp://192.168.11.88:554/stream2
 region_mode: identity
 
+video:
+  # Drop buffered RTSP frames before decoding the next frame to reduce visible lag.
+  rtsp_drop_frames: 2
+
 detector:
   backend: ncnn
   ncnn_param: models/yolo26n_ncnn_model/model.ncnn.param
