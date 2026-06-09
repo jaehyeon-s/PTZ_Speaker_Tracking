@@ -55,11 +55,11 @@ class VerifyDemoSmokeTests(unittest.TestCase):
         args = SimpleNamespace(
             registration_mode="marker",
             registration_reference="observed",
-            target_marker_id=7,
+            target_marker_id=0,
         )
         observed = (40, 10, 120, 110)
         people = [PersonDetection((10, 10, 40, 80))]
-        markers = [MarkerDetection(7, (30, 40), ((25, 35), (35, 35), (35, 45), (25, 45)))]
+        markers = [MarkerDetection(0, (30, 40), ((25, 35), (35, 35), (35, 45), (25, 45)))]
 
         bbox = select_registration_bbox(args, None, observed, people, markers, None, None)
 
@@ -69,11 +69,11 @@ class VerifyDemoSmokeTests(unittest.TestCase):
         args = SimpleNamespace(
             registration_mode="marker",
             registration_reference="selected",
-            target_marker_id=7,
+            target_marker_id=0,
         )
         observed = (40, 10, 120, 110)
         people = [PersonDetection((10, 10, 40, 80))]
-        markers = [MarkerDetection(7, (30, 40), ((25, 35), (35, 35), (35, 45), (25, 45)))]
+        markers = [MarkerDetection(0, (30, 40), ((25, 35), (35, 35), (35, 45), (25, 45)))]
 
         bbox = select_registration_bbox(args, None, observed, people, markers, None, None)
 
@@ -116,10 +116,10 @@ class VerifyDemoSmokeTests(unittest.TestCase):
         self.assertEqual(rows[1]["region_source"], "center_crop")
 
     def test_marker_positive_requires_marker_inside_observed_region(self):
-        marker = MarkerDetection(7, (50, 40), ((45, 35), (55, 35), (55, 45), (45, 45)))
+        marker = MarkerDetection(0, (50, 40), ((45, 35), (55, 35), (55, 45), (45, 45)))
 
-        self.assertTrue(marker_visible_in_observed_region([marker], (20, 20, 80, 80), 7))
-        self.assertFalse(marker_visible_in_observed_region([marker], (90, 20, 140, 80), 7))
+        self.assertTrue(marker_visible_in_observed_region([marker], (20, 20, 80, 80), 0))
+        self.assertFalse(marker_visible_in_observed_region([marker], (90, 20, 140, 80), 0))
         self.assertFalse(marker_visible_in_observed_region([marker], (20, 20, 80, 80), 8))
 
     def test_supervisor_disables_tracking_after_confirmed_mismatch(self):

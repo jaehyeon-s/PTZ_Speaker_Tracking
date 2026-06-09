@@ -145,7 +145,7 @@ YOLO/NCNN model input: 640x640
 비교용으로만 남겨둡니다.
 
 ```bash
-python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 7
+python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 0
 ```
 
 ## 주요 옵션

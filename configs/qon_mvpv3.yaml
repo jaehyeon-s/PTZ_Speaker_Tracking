@@ -13,7 +13,7 @@ detector:
 registration:
   mode: marker
   reference: selected
-  target_marker_id: 7
+  target_marker_id: 0
   register_on_start: true
   marker_positive: false
   timeout_frames: 90
