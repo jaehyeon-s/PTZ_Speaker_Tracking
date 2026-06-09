@@ -404,7 +404,9 @@ def main() -> int:
                     supervisor.enable_tracking("registered")
                     registered_this_frame = True
 
-            if verifier.registered and should_verify and not registered_this_frame:
+            if should_verify and (not verifier.registered or registered_this_frame):
+                print_status(frame_index, last_result, recovery_bbox, recovery_score, fps)
+            elif verifier.registered and should_verify:
                 marker_verified = (
                     args.marker_positive
                     and marker_visible_in_observed_region(markers, bbox, args.target_marker_id)
