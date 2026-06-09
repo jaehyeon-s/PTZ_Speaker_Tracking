@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--detector",
         choices=("hog", "opencv-yolo", "ncnn", "manual"),
-        default=config_value(config, "detector", "detector.backend", default="ncnn"),
+        default=config_value(config, "detector.backend", "detector", default="ncnn"),
         help="Person detector used for registration and identity observations",
     )
     parser.add_argument("--yolo-model", default=config_value(config, "yolo_model", "detector.yolo_model"), help="Optional YOLO ONNX model path")

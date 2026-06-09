@@ -18,6 +18,7 @@ from src.app.verify_demo import (
     load_config,
     main,
     marker_visible_in_observed_region,
+    parse_args,
     select_registration_bbox,
     should_collect_markers,
     should_collect_registration_inputs,
@@ -50,6 +51,29 @@ class VerifyDemoSmokeTests(unittest.TestCase):
         self.assertEqual(config_value(config, "detector.backend"), "ncnn")
         self.assertEqual(config_value(config, "detector.ncnn_input_size"), 640)
         self.assertIs(config_value(config, "camera.configure_supervisor_actuator"), True)
+
+    def test_parse_args_reads_nested_detector_backend_from_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text(
+                "\n".join(
+                    [
+                        "source: rtsp://192.168.11.88:554/stream2",
+                        "detector:",
+                        "  backend: ncnn",
+                        "  ncnn_param: models/yolo26n_ncnn_model/model.ncnn.param",
+                        "  ncnn_bin: models/yolo26n_ncnn_model/model.ncnn.bin",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(sys, "argv", ["main.py", "--config", str(path)]):
+                args = parse_args()
+
+        self.assertEqual(args.detector, "ncnn")
+        self.assertEqual(args.ncnn_param, "models/yolo26n_ncnn_model/model.ncnn.param")
+        self.assertEqual(args.ncnn_bin, "models/yolo26n_ncnn_model/model.ncnn.bin")
 
     def test_marker_registration_defaults_to_observed_reference(self):
         args = SimpleNamespace(
