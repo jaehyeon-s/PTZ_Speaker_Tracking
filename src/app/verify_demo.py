@@ -198,7 +198,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--recovery-confidence", type=float, default=config_value(config, "recovery_confidence", "recovery.confidence", default=0.4))
     parser.add_argument("--device", default=config_value(config, "device"))
     parser.add_argument("--rtsp-drop-frames", type=int, default=config_value(config, "rtsp_drop_frames", "video.rtsp_drop_frames", default=0))
-    parser.add_argument("--rtsp-read-timeout", type=float, default=config_value(config, "rtsp_read_timeout", "video.rtsp_read_timeout", default=10.0))
+    parser.add_argument("--rtsp-read-timeout", type=float, default=config_value(config, "rtsp_read_timeout", "video.rtsp_read_timeout", default=2.0))
+    parser.add_argument(
+        "--rtsp-first-read-timeout",
+        type=float,
+        default=config_value(config, "rtsp_first_read_timeout", "video.rtsp_first_read_timeout", default=10.0),
+    )
     parser.add_argument("--output", default=config_value(config, "output", "logging.output"), help="Write annotated MP4")
     parser.add_argument("--log-csv", default=config_value(config, "log_csv", "logging.csv"))
     parser.add_argument("--no-window", action="store_true", default=bool(config_value(config, "no_window", "display.no_window", default=False)))
@@ -296,7 +301,12 @@ def main() -> int:
 
     import cv2
 
-    video = VideoSource(args.source, rtsp_drop_frames=args.rtsp_drop_frames, read_timeout_seconds=args.rtsp_read_timeout)
+    video = VideoSource(
+        args.source,
+        rtsp_drop_frames=args.rtsp_drop_frames,
+        read_timeout_seconds=args.rtsp_read_timeout,
+        first_read_timeout_seconds=args.rtsp_first_read_timeout,
+    )
     if not video.is_opened():
         print("Could not open validation video source.")
         return 1

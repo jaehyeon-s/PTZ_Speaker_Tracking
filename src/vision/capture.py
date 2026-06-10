@@ -8,7 +8,13 @@ import time
 
 
 class VideoSource:
-    def __init__(self, source: str, rtsp_drop_frames: int = 0, read_timeout_seconds: float = 2.0) -> None:
+    def __init__(
+        self,
+        source: str,
+        rtsp_drop_frames: int = 0,
+        read_timeout_seconds: float = 2.0,
+        first_read_timeout_seconds: float = 10.0,
+    ) -> None:
         import cv2
 
         self.cv2 = cv2
@@ -22,6 +28,7 @@ class VideoSource:
         self._consecutive_failures = 0
         self._max_consecutive_failures = 60
         self._read_timeout_seconds = read_timeout_seconds
+        self._first_read_timeout_seconds = first_read_timeout_seconds
         self._running = False
         self._thread: threading.Thread | None = None
         parsed_source = int(source) if source.isdigit() else source
@@ -40,7 +47,8 @@ class VideoSource:
 
     def read(self):
         if self.source.lower().startswith("rtsp://"):
-            deadline = time.monotonic() + self._read_timeout_seconds
+            timeout = self._first_read_timeout_seconds if self._consumed_seq == 0 else self._read_timeout_seconds
+            deadline = time.monotonic() + timeout
             while True:
                 with self._lock:
                     if self._latest_frame is not None and not self._latest_ok:

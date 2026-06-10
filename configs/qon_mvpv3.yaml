@@ -4,7 +4,8 @@ region_mode: identity
 video:
   # RTSP uses a latest-frame capture thread; keep this 0 unless extra frame skipping is needed.
   rtsp_drop_frames: 0
-  rtsp_read_timeout: 10.0
+  rtsp_read_timeout: 2.0
+  rtsp_first_read_timeout: 10.0
 
 detector:
   backend: ncnn
