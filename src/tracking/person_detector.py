@@ -137,7 +137,7 @@ class NCNNPersonDetector(PersonDetector):
                 self.input_size,
                 self.confidence_threshold,
             )
-            if not detections:
+            if detections is None:
                 detections = detections_to_person_detections(
                     raw_output,
                     bbox_format="xyxy",
@@ -387,47 +387,50 @@ def _parse_yolo_ncnn_output(
     frame_shape: tuple[int, int, int],
     input_size: int,
     confidence_threshold: float,
-) -> List[PersonDetection]:
+) -> List[PersonDetection] | None:
     """Parse Ultralytics YOLO NCNN detect tensors.
 
     Common exports return a tensor shaped like (classes + 4, anchors) or
     (anchors, classes + 4), where the first four values are xywh in resized
     square input coordinates and class 0 is the person score for COCO models.
     """
-    output = np.asarray(raw_output, dtype=np.float32).squeeze()
-    if output.ndim != 2:
-        return []
-    if output.shape[0] >= 5 and output.shape[0] < output.shape[1]:
-        rows = output.T
-    elif output.shape[1] >= 5:
-        rows = output
-    else:
-        return []
+    rows = _yolo_ncnn_rows(raw_output)
+    if rows is None:
+        return None
 
     frame_h, frame_w = frame_shape[:2]
     scale_x = frame_w / max(float(input_size), 1.0)
     scale_y = frame_h / max(float(input_size), 1.0)
-    detections: List[PersonDetection] = []
-    for row in rows:
-        if row.shape[0] < 5:
-            continue
-        class_scores = row[4:]
-        class_id = int(np.argmax(class_scores))
-        if class_id != 0:
-            continue
-        confidence = float(class_scores[class_id])
-        if confidence < confidence_threshold:
-            continue
 
-        cx, cy, width, height = (float(value) for value in row[:4])
+    scores = rows[:, 4:]
+    class_ids = np.argmax(scores, axis=1)
+    confidences = scores[np.arange(rows.shape[0]), class_ids]
+    keep = (class_ids == 0) & (confidences >= confidence_threshold)
+    if not np.any(keep):
+        return []
+
+    detections: List[PersonDetection] = []
+    for row, confidence in zip(rows[keep], confidences[keep]):
+        cx, cy, width, height = row[:4].astype(float)
         x1 = int(round((cx - width / 2.0) * scale_x))
         y1 = int(round((cy - height / 2.0) * scale_y))
         box_w = int(round(width * scale_x))
         box_h = int(round(height * scale_y))
         if box_w <= 0 or box_h <= 0:
             continue
-        detections.append(PersonDetection((x1, y1, box_w, box_h), confidence))
+        detections.append(PersonDetection((x1, y1, box_w, box_h), float(confidence)))
     return detections
+
+
+def _yolo_ncnn_rows(raw_output: Any) -> np.ndarray | None:
+    output = np.asarray(raw_output, dtype=np.float32).squeeze()
+    if output.ndim != 2:
+        return None
+    if output.shape[0] >= 5 and output.shape[0] < output.shape[1]:
+        return output.T
+    if output.shape[1] >= 5:
+        return output
+    return None
 
 
 def nms_person_detections(

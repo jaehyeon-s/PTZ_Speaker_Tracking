@@ -360,6 +360,8 @@ def main() -> int:
                 "mismatch_count",
                 "ptz_action",
                 "fps",
+                "read_ms",
+                "detect_ms",
             ]
         )
 
@@ -367,12 +369,16 @@ def main() -> int:
     fps_meter = FpsMeter()
     try:
         while True:
+            read_start = time.perf_counter()
             ok, frame = video.read()
+            read_ms = (time.perf_counter() - read_start) * 1000.0
             if not ok:
                 break
             frame_index += 1
             fps = fps_meter.tick()
+            detect_start = time.perf_counter()
             bbox, region_source = provider.region_for_frame(frame_index, frame)
+            detect_ms = (time.perf_counter() - detect_start) * 1000.0
             registered_this_frame = False
             should_verify = frame_index == 1 or frame_index % max(1, args.verify_every_frames) == 0
 
@@ -405,7 +411,7 @@ def main() -> int:
                     registered_this_frame = True
 
             if should_verify and (not verifier.registered or registered_this_frame):
-                print_status(frame_index, last_result, recovery_bbox, recovery_score, fps)
+                print_status(frame_index, last_result, recovery_bbox, recovery_score, fps, read_ms, detect_ms)
             elif verifier.registered and should_verify:
                 marker_verified = (
                     args.marker_positive
@@ -431,7 +437,7 @@ def main() -> int:
                         )
                 if last_result.event in ("PRESENTER_MISMATCH", "PRESENTER_MISTRACK_CONFIRMED"):
                     supervisor.confirm_mismatch()
-                print_status(frame_index, last_result, recovery_bbox, recovery_score, fps)
+                print_status(frame_index, last_result, recovery_bbox, recovery_score, fps, read_ms, detect_ms)
 
             ptz_action = ""
             if ptz_controller is not None and verifier.registered:
@@ -464,6 +470,8 @@ def main() -> int:
                         int(get_identity_metric(provider, "mismatch_count")),
                         ptz_action,
                         f"{fps:.2f}",
+                        f"{read_ms:.1f}",
+                        f"{detect_ms:.1f}",
                     ]
                 )
                 log_file.flush()
@@ -790,10 +798,11 @@ class FpsMeter:
         return self._fps
 
 
-def print_status(frame_index, result, recovery_bbox, recovery_score, fps: float) -> None:
+def print_status(frame_index, result, recovery_bbox, recovery_score, fps: float, read_ms: float, detect_ms: float) -> None:
     message = (
         f"frame={frame_index} state={result.state.value} event={result.event} "
-        f"score={result.score:.3f} source={result.source} fps={fps:.2f}"
+        f"score={result.score:.3f} source={result.source} fps={fps:.2f} "
+        f"read_ms={read_ms:.1f} detect_ms={detect_ms:.1f}"
     )
     if recovery_bbox is not None:
         message += f" recovery_bbox={format_bbox(recovery_bbox)} recovery_score={recovery_score:.3f}"

@@ -2,15 +2,15 @@ source: rtsp://192.168.11.88:554/stream2
 region_mode: identity
 
 video:
-  # Drop buffered RTSP frames before decoding the next frame to reduce visible lag.
-  rtsp_drop_frames: 2
+  # RTSP uses a latest-frame capture thread; keep this 0 unless debugging non-threaded capture.
+  rtsp_drop_frames: 0
 
 detector:
   backend: ncnn
   ncnn_param: models/yolo26n_ncnn_model/model.ncnn.param
   ncnn_bin: models/yolo26n_ncnn_model/model.ncnn.bin
   # YOLO model input size. This is not the RTSP frame size; stream2 is 640x360.
-  ncnn_input_size: 640
+  ncnn_input_size: 416
   ncnn_input_name: in0
   ncnn_output_names: out0
   conf_threshold: 0.35
