@@ -164,6 +164,8 @@ python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 0
 | `--configure-supervisor-actuator` | Qon 내부 tracking/auto PTZ/debug burn-in off |
 | `--ptz-follow-target` | identity-selected bbox를 향해 Qon PTZ 직접 제어 |
 | `--rtsp-drop-frames` | RTSP capture thread가 새 frame을 읽기 전 추가로 버릴 frame 수. 기본값 0 권장 |
+| `--rtsp-read-timeout` | RTSP 새 frame 대기 시간. 시작 직후 I-frame 대기를 위해 기본 10초 |
+| `--ptz-timeout` | PTZ velocity 명령 전용 HTTP timeout. 기본 1초 |
 | `--reid-backend hsv` | HSV baseline Re-ID |
 | `--reid-backend onnx --reid-model ...` | OSNet-style ONNX Re-ID |
 | `--registration-mode marker` | ArUco marker로 발표자 등록 |

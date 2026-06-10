@@ -266,6 +266,7 @@ class QonVelocityPTZController:
         max_speed: int = 10,
         command_ttl_seconds: float = 0.35,
         async_commands: bool = False,
+        close_join_timeout_seconds: float = 1.0,
     ) -> None:
         self.control = control
         self.dead_zone_ratio = dead_zone_ratio
@@ -277,6 +278,7 @@ class QonVelocityPTZController:
         self.last_speed = 0
         self.last_sent_at = 0.0
         self.last_error: Exception | None = None
+        self.close_join_timeout_seconds = close_join_timeout_seconds
         self._pending_command: tuple[str, int, int] | None = None
         self._closed = False
         self._condition = threading.Condition()
@@ -310,12 +312,15 @@ class QonVelocityPTZController:
 
     def close(self) -> None:
         self.stop()
-        if self._worker is None:
-            return
-        with self._condition:
-            self._closed = True
-            self._condition.notify()
-        self._worker.join(timeout=1.0)
+        if self._worker is not None:
+            with self._condition:
+                self._closed = True
+                self._condition.notify()
+            self._worker.join(timeout=self.close_join_timeout_seconds)
+        try:
+            self.control.stop()
+        except Exception as exc:
+            self.last_error = exc
 
     def _command_for_bbox(self, bbox: tuple[int, int, int, int], frame_shape) -> tuple[str, int]:
         frame_h, frame_w = frame_shape[:2]

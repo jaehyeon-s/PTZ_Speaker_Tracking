@@ -2,8 +2,9 @@ source: rtsp://192.168.11.88:554/stream2
 region_mode: identity
 
 video:
-  # RTSP uses a latest-frame capture thread; keep this 0 unless debugging non-threaded capture.
+  # RTSP uses a latest-frame capture thread; keep this 0 unless extra frame skipping is needed.
   rtsp_drop_frames: 0
+  rtsp_read_timeout: 10.0
 
 detector:
   backend: ncnn
@@ -40,6 +41,7 @@ camera:
   username: admin
   password_env: QON_PASS
   auth_mode: digest
+  timeout: 5.0
   configure_supervisor_actuator: true
 
 ptz:
@@ -47,6 +49,7 @@ ptz:
   dead_zone: 0.12
   min_speed: 2
   max_speed: 10
+  timeout: 1.0
 
 logging:
   csv: logs/identity_supervisor.csv

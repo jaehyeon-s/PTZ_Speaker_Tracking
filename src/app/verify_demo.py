@@ -158,6 +158,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--camera-username", default=config_value(config, "camera_username", "camera.username"))
     parser.add_argument("--camera-password-env", default=config_value(config, "camera_password_env", "camera.password_env"))
     parser.add_argument("--camera-auth-mode", choices=("none", "basic", "digest"), default=config_value(config, "camera_auth_mode", "camera.auth_mode", default="digest"))
+    parser.add_argument("--camera-timeout", type=float, default=config_value(config, "camera_timeout", "camera.timeout", default=5.0))
     parser.add_argument(
         "--control-camera",
         action="store_true",
@@ -185,6 +186,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ptz-dead-zone", type=float, default=config_value(config, "ptz_dead_zone", "ptz.dead_zone", default=0.12))
     parser.add_argument("--ptz-min-speed", type=int, default=config_value(config, "ptz_min_speed", "ptz.min_speed", default=2))
     parser.add_argument("--ptz-max-speed", type=int, default=config_value(config, "ptz_max_speed", "ptz.max_speed", default=10))
+    parser.add_argument("--ptz-timeout", type=float, default=config_value(config, "ptz_timeout", "ptz.timeout", default=1.0))
     parser.add_argument(
         "--recovery-action",
         choices=("none", "stop", "home", "zoomout"),
@@ -196,6 +198,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--recovery-confidence", type=float, default=config_value(config, "recovery_confidence", "recovery.confidence", default=0.4))
     parser.add_argument("--device", default=config_value(config, "device"))
     parser.add_argument("--rtsp-drop-frames", type=int, default=config_value(config, "rtsp_drop_frames", "video.rtsp_drop_frames", default=0))
+    parser.add_argument("--rtsp-read-timeout", type=float, default=config_value(config, "rtsp_read_timeout", "video.rtsp_read_timeout", default=10.0))
     parser.add_argument("--output", default=config_value(config, "output", "logging.output"), help="Write annotated MP4")
     parser.add_argument("--log-csv", default=config_value(config, "log_csv", "logging.csv"))
     parser.add_argument("--no-window", action="store_true", default=bool(config_value(config, "no_window", "display.no_window", default=False)))
@@ -293,7 +296,7 @@ def main() -> int:
 
     import cv2
 
-    video = VideoSource(args.source, rtsp_drop_frames=args.rtsp_drop_frames)
+    video = VideoSource(args.source, rtsp_drop_frames=args.rtsp_drop_frames, read_timeout_seconds=args.rtsp_read_timeout)
     if not video.is_opened():
         print("Could not open validation video source.")
         return 1
@@ -321,7 +324,8 @@ def main() -> int:
         matcher,
         VerifierConfig(max(1, args.mismatch_limit)),
     )
-    ptz_controller = build_ptz_controller(args, camera_control)
+    ptz_camera_control = build_camera_control(args, timeout=args.ptz_timeout) if args.ptz_follow_target else camera_control
+    ptz_controller = build_ptz_controller(args, ptz_camera_control)
     recovery_detector = (
         YoloRecoveryDetector(args.recovery_model, args.recovery_imgsz, args.recovery_confidence, args.device)
         if args.recovery_model
@@ -547,7 +551,7 @@ def build_region_provider(args, matcher):
     return CenterCropRegionProvider(args.center_width_ratio, args.center_height_ratio)
 
 
-def build_camera_control(args):
+def build_camera_control(args, timeout: float | None = None):
     if (
         not args.control_camera
         and not args.enable_camera_tracking_on_start
@@ -563,6 +567,7 @@ def build_camera_control(args):
         args.camera_username,
         password,
         auth_mode=args.camera_auth_mode,
+        timeout=args.camera_timeout if timeout is None else timeout,
     )
 
 

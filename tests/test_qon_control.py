@@ -1,3 +1,4 @@
+import threading
 import unittest
 from urllib.parse import parse_qs
 
@@ -126,6 +127,9 @@ class QonTrackingControlTests(unittest.TestCase):
             def ptz_command(self, command, speed_x, speed_y):
                 self.calls.append((command, speed_x, speed_y))
 
+            def stop(self):
+                self.ptz_command("ptzstop", 10, 10)
+
         control = RecordingControl()
         ptz = QonVelocityPTZController(
             control,
@@ -141,6 +145,37 @@ class QonTrackingControlTests(unittest.TestCase):
         self.assertTrue(action.startswith("right:"))
         self.assertGreaterEqual(len(control.calls), 1)
         self.assertEqual(control.calls[-1], ("ptzstop", 10, 10))
+
+    def test_async_velocity_ptz_close_sends_synchronous_stop_if_worker_is_blocked(self):
+        class BlockingMoveControl:
+            def __init__(self):
+                self.calls = []
+                self.move_started = threading.Event()
+
+            def ptz_command(self, command, speed_x, speed_y):
+                self.calls.append((command, speed_x, speed_y))
+                if command != "ptzstop":
+                    self.move_started.set()
+                    threading.Event().wait(0.2)
+
+            def stop(self):
+                self.calls.append(("sync-stop", 10, 10))
+
+        control = BlockingMoveControl()
+        ptz = QonVelocityPTZController(
+            control,
+            dead_zone_ratio=0.1,
+            min_speed=2,
+            max_speed=10,
+            async_commands=True,
+            close_join_timeout_seconds=0.01,
+        )
+
+        ptz.follow_bbox((150, 40, 190, 80), (100, 200, 3))
+        self.assertTrue(control.move_started.wait(0.1))
+        ptz.close()
+
+        self.assertIn(("sync-stop", 10, 10), control.calls)
 
 
 if __name__ == "__main__":
