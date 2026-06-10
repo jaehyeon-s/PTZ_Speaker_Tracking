@@ -18,12 +18,15 @@ from src.app.verify_demo import (
     load_config,
     main,
     marker_visible_in_observed_region,
+    maybe_auto_reregister,
     parse_args,
     select_registration_bbox,
     should_collect_markers,
     should_collect_registration_inputs,
 )
+from src.camera.region_provider import IdentityMatchedRegionProvider, IdentityObservation
 from src.tracking.target_state import MarkerDetection, PersonDetection
+from src.vision.models import TrackingState
 
 
 class VerifyDemoSmokeTests(unittest.TestCase):
@@ -226,6 +229,90 @@ class VerifyDemoSmokeTests(unittest.TestCase):
 
         self.assertFalse(should_collect_markers(args, verifier_registered=True, should_verify=False))
         self.assertTrue(should_collect_markers(args, verifier_registered=True, should_verify=True))
+
+    def test_auto_reregister_registers_marker_person_after_confirm_frames(self):
+        args = SimpleNamespace(auto_reregister=True, target_marker_id=0, reregister_confirm_frames=2)
+        provider = make_lost_identity_provider()
+        provider.hold_count = 30
+        provider.mismatch_count = 4
+        verifier = FakeVerifier()
+        marker = MarkerDetection(0, (30, 40), ((25, 35), (35, 35), (35, 45), (25, 45)))
+
+        streak, bbox = maybe_auto_reregister(args, np.zeros((100, 100, 3), dtype=np.uint8), provider, verifier, [marker], 0)
+        self.assertEqual(streak, 1)
+        self.assertIsNone(bbox)
+
+        streak, bbox = maybe_auto_reregister(args, np.zeros((100, 100, 3), dtype=np.uint8), provider, verifier, [marker], streak)
+
+        self.assertEqual(streak, 0)
+        self.assertEqual(bbox, (10, 10, 50, 90))
+        self.assertEqual(verifier.registered_bboxes, [(10, 10, 50, 90)])
+        self.assertEqual(provider.hold_count, 0)
+        self.assertEqual(provider.mismatch_count, 0)
+        self.assertEqual(provider.last_trusted_bbox, (10, 10, 50, 90))
+
+    def test_auto_reregister_ignores_marker_when_not_lost(self):
+        args = SimpleNamespace(auto_reregister=True, target_marker_id=0, reregister_confirm_frames=1)
+        provider = make_lost_identity_provider()
+        provider.last_observation = IdentityObservation(
+            (10, 10, 50, 90),
+            "identity_aligned",
+            TrackingState.CAMERA_ALIGNED,
+            "CAMERA_ALIGNED",
+        )
+        verifier = FakeVerifier()
+        marker = MarkerDetection(0, (30, 40), ((25, 35), (35, 35), (35, 45), (25, 45)))
+
+        streak, bbox = maybe_auto_reregister(args, np.zeros((100, 100, 3), dtype=np.uint8), provider, verifier, [marker], 0)
+
+        self.assertEqual(streak, 0)
+        self.assertIsNone(bbox)
+        self.assertEqual(verifier.registered_bboxes, [])
+
+    def test_auto_reregister_resets_streak_when_marker_disappears(self):
+        args = SimpleNamespace(auto_reregister=True, target_marker_id=0, reregister_confirm_frames=2)
+        provider = make_lost_identity_provider()
+        verifier = FakeVerifier()
+        marker = MarkerDetection(0, (30, 40), ((25, 35), (35, 35), (35, 45), (25, 45)))
+
+        streak, bbox = maybe_auto_reregister(args, np.zeros((100, 100, 3), dtype=np.uint8), provider, verifier, [marker], 0)
+        streak, bbox = maybe_auto_reregister(args, np.zeros((100, 100, 3), dtype=np.uint8), provider, verifier, [], streak)
+
+        self.assertEqual(streak, 0)
+        self.assertIsNone(bbox)
+        self.assertEqual(verifier.registered_bboxes, [])
+
+    def test_auto_reregister_collects_markers_only_while_lost(self):
+        args = SimpleNamespace(register_on_start=True, no_window=True, marker_positive=False, auto_reregister=True)
+        provider = make_lost_identity_provider()
+
+        self.assertTrue(should_collect_markers(args, verifier_registered=True, should_verify=False, provider=provider))
+        provider.last_observation = IdentityObservation(
+            (10, 10, 50, 90),
+            "identity_hold",
+            TrackingState.HOLD,
+            "OBSERVATION_HOLD",
+        )
+        self.assertFalse(should_collect_markers(args, verifier_registered=True, should_verify=False, provider=provider))
+
+
+def make_lost_identity_provider():
+    provider = IdentityMatchedRegionProvider(object(), SimpleNamespace(reference=object()))
+    provider.last_people = [PersonDetection((10, 10, 40, 80))]
+    provider.last_observation = IdentityObservation(None, "identity_lost", TrackingState.LOST, "TARGET_LOST")
+    return provider
+
+
+class FakeVerifier:
+    registered = True
+
+    def __init__(self):
+        self.registered_bboxes = []
+
+    def register(self, frame, bbox):
+        del frame
+        self.registered_bboxes.append(bbox)
+        return True
 
 
 if __name__ == "__main__":

@@ -154,6 +154,18 @@ def parse_args() -> argparse.Namespace:
         default=bool(config_value(config, "marker_positive", "registration.marker_positive", default=False)),
         help="Treat the target marker visible inside the observed region as a strong verification signal",
     )
+    parser.add_argument(
+        "--auto-reregister",
+        action="store_true",
+        default=bool(config_value(config, "auto_reregister", "registration.auto_reregister", default=False)),
+        help="While LOST, re-register the presenter when the target marker is seen on a person",
+    )
+    parser.add_argument(
+        "--reregister-confirm-frames",
+        type=int,
+        default=config_value(config, "reregister_confirm_frames", "registration.reregister_confirm_frames", default=3),
+        help="Consecutive LOST marker frames required before auto re-registration",
+    )
     parser.add_argument("--camera-url", default=config_value(config, "camera_url", "camera.url"), help="Qon camera origin, for example http://192.168.11.88")
     parser.add_argument("--camera-username", default=config_value(config, "camera_username", "camera.username"))
     parser.add_argument("--camera-password-env", default=config_value(config, "camera_password_env", "camera.password_env"))
@@ -322,7 +334,7 @@ def main() -> int:
     registration_detector = build_registration_detector(args)
     marker_detector = (
         ArucoMarkerDetector()
-        if args.registration_mode in ("marker", "marker-or-gesture") or args.marker_positive
+        if args.registration_mode in ("marker", "marker-or-gesture") or args.marker_positive or args.auto_reregister
         else None
     )
     gesture_detector = (
@@ -381,6 +393,7 @@ def main() -> int:
 
     frame_index = 0
     fps_meter = FpsMeter()
+    reregister_streak = 0
     try:
         while True:
             read_start = time.perf_counter()
@@ -400,7 +413,7 @@ def main() -> int:
             markers = []
             if registration_detector is not None and should_collect_registration_inputs(args, verifier.registered):
                 people = registration_detector.detect(frame)
-            if marker_detector is not None and should_collect_markers(args, verifier.registered, should_verify):
+            if marker_detector is not None and should_collect_markers(args, verifier.registered, should_verify, provider):
                 markers = marker_detector.detect(frame)
 
             if args.register_on_start and not verifier.registered:
@@ -418,15 +431,36 @@ def main() -> int:
                         print("Could not register presenter from the available frame.")
                         return 1
                 else:
+                    reset_provider_registration_state(provider, selected_bbox)
                     last_result = VerificationResult(
                         TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
                     supervisor.enable_tracking("registered")
                     registered_this_frame = True
 
-            if should_verify and (not verifier.registered or registered_this_frame):
+            reregister_streak, reregister_bbox = maybe_auto_reregister(
+                args,
+                frame,
+                provider,
+                verifier,
+                markers,
+                reregister_streak,
+            )
+            if reregister_bbox is not None:
+                last_result = VerificationResult(
+                    TrackingState.VERIFIED,
+                    reregister_bbox,
+                    1.0,
+                    "PRESENTER_REREGISTERED",
+                    "auto_reregister",
+                )
+                supervisor.enable_tracking("auto_reregister")
+                registered_this_frame = True
+
+            should_report = should_verify or registered_this_frame
+            if should_report and (not verifier.registered or registered_this_frame):
                 print_status(frame_index, last_result, recovery_bbox, recovery_score, fps, read_ms, detect_ms)
-            elif verifier.registered and should_verify:
+            elif verifier.registered and should_report:
                 marker_verified = (
                     args.marker_positive
                     and marker_visible_in_observed_region(markers, bbox, args.target_marker_id)
@@ -462,7 +496,7 @@ def main() -> int:
                     ptz_controller.stop()
                     ptz_action = "ptzstop"
 
-            if log_writer and should_verify:
+            if log_writer and should_report:
                 log_writer.writerow(
                     [
                         frame_index,
@@ -509,7 +543,9 @@ def main() -> int:
                     )
                     if selected_bbox is None:
                         continue
-                    verifier.register(frame, selected_bbox)
+                    if not verifier.register(frame, selected_bbox):
+                        continue
+                    reset_provider_registration_state(provider, selected_bbox)
                     last_result = VerificationResult(
                         TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
@@ -649,14 +685,45 @@ def should_collect_registration_inputs(args, verifier_registered: bool) -> bool:
     return (args.register_on_start and not verifier_registered) or not args.no_window
 
 
-def should_collect_markers(args, verifier_registered: bool, should_verify: bool) -> bool:
+def should_collect_markers(args, verifier_registered: bool, should_verify: bool, provider=None) -> bool:
     return should_collect_registration_inputs(args, verifier_registered) or (
-        args.marker_positive and verifier_registered and should_verify
+        getattr(args, "marker_positive", False) and verifier_registered and should_verify
+    ) or (
+        getattr(args, "auto_reregister", False)
+        and verifier_registered
+        and is_identity_provider(provider)
+        and provider.last_observation.state == TrackingState.LOST
     )
 
 
 def is_identity_provider(provider) -> bool:
     return isinstance(provider, IdentityMatchedRegionProvider)
+
+
+def reset_provider_registration_state(provider, bbox: BBox | None) -> None:
+    if is_identity_provider(provider):
+        provider.reset_identity_state(bbox)
+
+
+def maybe_auto_reregister(args, frame, provider, verifier, markers, streak: int) -> tuple[int, BBox | None]:
+    if not getattr(args, "auto_reregister", False):
+        return 0, None
+    if not verifier.registered or not is_identity_provider(provider):
+        return 0, None
+    if provider.last_observation.state != TrackingState.LOST:
+        return 0, None
+
+    marker_bbox = select_marker_person_bbox(provider.last_people, markers, args.target_marker_id)
+    if marker_bbox is None:
+        return 0, None
+
+    streak += 1
+    if streak < max(1, args.reregister_confirm_frames):
+        return streak, None
+    if not verifier.register(frame, marker_bbox):
+        return 0, None
+    provider.reset_identity_state(marker_bbox)
+    return 0, marker_bbox
 
 
 def result_from_identity_observation(observation) -> VerificationResult:

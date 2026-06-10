@@ -82,6 +82,43 @@ class RegionProviderTests(unittest.TestCase):
         self.assertEqual(source, "identity_lost")
         self.assertEqual(provider.last_observation.state, TrackingState.LOST)
 
+    def test_identity_provider_reset_clears_lost_hold_state_after_reregistration(self):
+        frame = Frame()
+        people = [PersonDetection((10, 20, 20, 40))]
+        detector = FakeDetector(people)
+        matcher = FakeMatcher({(10, 20, 30, 60): 0.20})
+        provider = IdentityMatchedRegionProvider(
+            detector,
+            matcher,
+            weak_min_score=0.25,
+            identity_margin=0.05,
+            hold_limit=2,
+        )
+
+        provider.region_for_frame(1, frame)
+        provider.region_for_frame(2, frame)
+        self.assertEqual(provider.last_observation.state, TrackingState.LOST)
+
+        provider.reset_identity_state((10, 20, 30, 60))
+        bbox, source = provider.region_for_frame(3, frame)
+
+        self.assertEqual(bbox, (10, 20, 30, 60))
+        self.assertEqual(source, "identity_hold")
+        self.assertEqual(provider.last_observation.state, TrackingState.HOLD)
+        self.assertEqual(provider.last_observation.hold_count, 1)
+
+    def test_identity_provider_clears_last_people_before_registration(self):
+        frame = Frame()
+        detector = FakeDetector([PersonDetection((10, 20, 20, 40))])
+        matcher = FakeMatcher({})
+        matcher.reference = None
+        provider = IdentityMatchedRegionProvider(detector, matcher)
+        provider.last_people = [PersonDetection((10, 20, 20, 40))]
+
+        provider.region_for_frame(1, frame)
+
+        self.assertEqual(provider.last_people, [])
+
 
 class FakeDetector:
     def __init__(self, people):

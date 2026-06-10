@@ -172,6 +172,8 @@ python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 0
 | `--registration-mode marker` | ArUco marker로 발표자 등록 |
 | `--registration-mode gesture` | MediaPipe 손들기 후보로 발표자 등록 |
 | `--registration-mode marker-or-gesture` | marker 우선, 없으면 gesture |
+| `--auto-reregister` | LOST 상태에서 marker 0이 붙은 사람으로 자동 재등록 |
+| `--reregister-confirm-frames` | 자동 재등록 전 연속 확인 frame 수 |
 
 기본 실행은 `--detector ncnn`으로 동작합니다. 따라서 실험 전 YOLO26n을
 Ultralytics NCNN export로 변환해 다음 파일을 준비해야 합니다.

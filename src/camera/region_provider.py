@@ -110,6 +110,7 @@ class IdentityMatchedRegionProvider:
         self.mismatch_limit = max(1, mismatch_limit)
         self.hold_limit = max(1, hold_limit)
         self.last_trusted_bbox: BBox | None = None
+        self.last_people: list[PersonDetection] = []
         self.hold_count = 0
         self.mismatch_count = 0
         self.last_observation = IdentityObservation(
@@ -121,6 +122,7 @@ class IdentityMatchedRegionProvider:
 
     def region_for_frame(self, frame_index: int, frame) -> tuple[BBox | None, str]:
         if not self._has_reference():
+            self.last_people = []
             bbox, source = self.fallback_provider.region_for_frame(frame_index, frame)
             self.last_observation = IdentityObservation(
                 bbox,
@@ -131,6 +133,7 @@ class IdentityMatchedRegionProvider:
             return bbox, self.last_observation.source
 
         people = self.detector.detect(frame)
+        self.last_people = people
         candidates = [_candidate_from_person(index, person) for index, person in enumerate(people)]
         if not candidates:
             return self._hold_or_lost("NO_PERSON_CANDIDATES", 0.0, 0.0, 0.0, 0)
@@ -248,6 +251,11 @@ class IdentityMatchedRegionProvider:
 
     def _has_reference(self) -> bool:
         return getattr(self.matcher, "reference", None) is not None
+
+    def reset_identity_state(self, bbox: BBox | None = None) -> None:
+        self.hold_count = 0
+        self.mismatch_count = 0
+        self.last_trusted_bbox = bbox
 
 
 def _candidate_from_person(index: int, person: PersonDetection) -> Candidate:

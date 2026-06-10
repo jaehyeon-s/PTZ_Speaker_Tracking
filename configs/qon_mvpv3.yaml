@@ -24,6 +24,8 @@ registration:
   target_marker_id: 0
   register_on_start: true
   marker_positive: false
+  auto_reregister: true
+  reregister_confirm_frames: 3
   timeout_frames: 90
 
 reid:
