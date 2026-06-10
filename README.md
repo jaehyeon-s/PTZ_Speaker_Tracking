@@ -163,7 +163,7 @@ python3 main.py --source "rtsp://192.168.11.88:554/stream2" --target-marker-id 0
 | `--identity-hold-limit` | HOLD가 LOST로 바뀌기 전 프레임 수 |
 | `--configure-supervisor-actuator` | Qon 내부 tracking/auto PTZ/debug burn-in off |
 | `--ptz-follow-target` | identity-selected bbox를 향해 Qon PTZ 직접 제어 |
-| `--rtsp-drop-frames` | non-threaded RTSP 디버깅용 frame drop 수. 기본 실행은 최신 frame capture thread 사용 |
+| `--rtsp-drop-frames` | RTSP capture thread가 새 frame을 읽기 전 추가로 버릴 frame 수. 기본값 0 권장 |
 | `--reid-backend hsv` | HSV baseline Re-ID |
 | `--reid-backend onnx --reid-model ...` | OSNet-style ONNX Re-ID |
 | `--registration-mode marker` | ArUco marker로 발표자 등록 |

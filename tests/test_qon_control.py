@@ -118,6 +118,30 @@ class QonTrackingControlTests(unittest.TestCase):
         self.assertIn("ptzcmd&right&", move_url)
         self.assertEqual(stop_url, "http://camera/cgi-bin/ptzctrl.cgi?ptzcmd&ptzstop&10&10")
 
+    def test_async_velocity_ptz_closes_with_stop_command(self):
+        class RecordingControl:
+            def __init__(self):
+                self.calls = []
+
+            def ptz_command(self, command, speed_x, speed_y):
+                self.calls.append((command, speed_x, speed_y))
+
+        control = RecordingControl()
+        ptz = QonVelocityPTZController(
+            control,
+            dead_zone_ratio=0.1,
+            min_speed=2,
+            max_speed=10,
+            async_commands=True,
+        )
+
+        action = ptz.follow_bbox((150, 40, 190, 80), (100, 200, 3))
+        ptz.close()
+
+        self.assertTrue(action.startswith("right:"))
+        self.assertGreaterEqual(len(control.calls), 1)
+        self.assertEqual(control.calls[-1], ("ptzstop", 10, 10))
+
 
 if __name__ == "__main__":
     unittest.main()

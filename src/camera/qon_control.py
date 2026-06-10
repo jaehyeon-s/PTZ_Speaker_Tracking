@@ -6,6 +6,7 @@ import argparse
 import base64
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass
 from enum import IntEnum
@@ -264,15 +265,25 @@ class QonVelocityPTZController:
         min_speed: int = 2,
         max_speed: int = 10,
         command_ttl_seconds: float = 0.35,
+        async_commands: bool = False,
     ) -> None:
         self.control = control
         self.dead_zone_ratio = dead_zone_ratio
         self.min_speed = min_speed
         self.max_speed = max(min_speed, max_speed)
         self.command_ttl_seconds = command_ttl_seconds
+        self.async_commands = async_commands
         self.last_command = "ptzstop"
         self.last_speed = 0
         self.last_sent_at = 0.0
+        self.last_error: Exception | None = None
+        self._pending_command: tuple[str, int, int] | None = None
+        self._closed = False
+        self._condition = threading.Condition()
+        self._worker: threading.Thread | None = None
+        if self.async_commands:
+            self._worker = threading.Thread(target=self._send_loop, daemon=True)
+            self._worker.start()
 
     def follow_bbox(self, bbox: tuple[int, int, int, int] | None, frame_shape) -> str:
         if bbox is None:
@@ -284,7 +295,7 @@ class QonVelocityPTZController:
             return command
         now = time.monotonic()
         if command != self.last_command or speed != self.last_speed or now - self.last_sent_at >= self.command_ttl_seconds:
-            self.control.ptz_command(command, speed, speed)
+            self._send(command, speed, speed)
             self.last_command = command
             self.last_speed = speed
             self.last_sent_at = now
@@ -292,10 +303,19 @@ class QonVelocityPTZController:
 
     def stop(self) -> None:
         if self.last_command != "ptzstop":
-            self.control.stop()
+            self._send("ptzstop", 10, 10)
         self.last_command = "ptzstop"
         self.last_speed = 0
         self.last_sent_at = time.monotonic()
+
+    def close(self) -> None:
+        self.stop()
+        if self._worker is None:
+            return
+        with self._condition:
+            self._closed = True
+            self._condition.notify()
+        self._worker.join(timeout=1.0)
 
     def _command_for_bbox(self, bbox: tuple[int, int, int, int], frame_shape) -> tuple[str, int]:
         frame_h, frame_w = frame_shape[:2]
@@ -315,6 +335,28 @@ class QonVelocityPTZController:
         speed_span = self.max_speed - self.min_speed
         scaled = min(1.0, max(0.0, (magnitude - self.dead_zone_ratio) / max(1.0 - self.dead_zone_ratio, 1e-6)))
         return direction, int(round(self.min_speed + scaled * speed_span))
+
+    def _send(self, command: str, speed_x: int, speed_y: int) -> None:
+        if not self.async_commands:
+            self.control.ptz_command(command, speed_x, speed_y)
+            return
+        with self._condition:
+            self._pending_command = (command, speed_x, speed_y)
+            self._condition.notify()
+
+    def _send_loop(self) -> None:
+        while True:
+            with self._condition:
+                while self._pending_command is None and not self._closed:
+                    self._condition.wait()
+                if self._pending_command is None and self._closed:
+                    return
+                command, speed_x, speed_y = self._pending_command
+                self._pending_command = None
+            try:
+                self.control.ptz_command(command, speed_x, speed_y)
+            except Exception as exc:  # pragma: no cover - depends on camera/network failures.
+                self.last_error = exc
 
 
 if __name__ == "__main__":

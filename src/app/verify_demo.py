@@ -510,7 +510,7 @@ def main() -> int:
         if log_file:
             log_file.close()
         if ptz_controller is not None:
-            ptz_controller.stop()
+            ptz_controller.close()
         if not args.no_window:
             cv2.destroyAllWindows()
     return 0
@@ -626,6 +626,7 @@ def build_ptz_controller(args, camera_control):
         dead_zone_ratio=args.ptz_dead_zone,
         min_speed=args.ptz_min_speed,
         max_speed=args.ptz_max_speed,
+        async_commands=True,
     )
 
 

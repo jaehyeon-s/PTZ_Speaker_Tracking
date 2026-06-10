@@ -8,7 +8,7 @@ import time
 
 
 class VideoSource:
-    def __init__(self, source: str, rtsp_drop_frames: int = 0) -> None:
+    def __init__(self, source: str, rtsp_drop_frames: int = 0, read_timeout_seconds: float = 2.0) -> None:
         import cv2
 
         self.cv2 = cv2
@@ -17,6 +17,11 @@ class VideoSource:
         self._lock = threading.Lock()
         self._latest_frame = None
         self._latest_ok = False
+        self._latest_seq = 0
+        self._consumed_seq = 0
+        self._consecutive_failures = 0
+        self._max_consecutive_failures = 60
+        self._read_timeout_seconds = read_timeout_seconds
         self._running = False
         self._thread: threading.Thread | None = None
         parsed_source = int(source) if source.isdigit() else source
@@ -35,14 +40,17 @@ class VideoSource:
 
     def read(self):
         if self.source.lower().startswith("rtsp://"):
-            deadline = time.monotonic() + 2.0
+            deadline = time.monotonic() + self._read_timeout_seconds
             while True:
                 with self._lock:
-                    if self._latest_frame is not None:
+                    if self._latest_frame is not None and not self._latest_ok:
+                        return False, None
+                    if self._latest_seq > self._consumed_seq and self._latest_frame is not None:
+                        self._consumed_seq = self._latest_seq
                         return self._latest_ok, self._latest_frame.copy()
                 if time.monotonic() >= deadline:
                     return False, None
-                time.sleep(0.01)
+                time.sleep(0.005)
         return self.capture.read()
 
     def fps(self) -> float:
@@ -56,10 +64,16 @@ class VideoSource:
 
     def _capture_latest(self) -> None:
         while self._running:
+            for _ in range(self.rtsp_drop_frames):
+                self.capture.grab()
             ok, frame = self.capture.read()
             with self._lock:
                 if ok:
                     self._latest_ok = True
                     self._latest_frame = frame
-                elif self._latest_frame is None:
+                    self._latest_seq += 1
+                    self._consecutive_failures = 0
+                else:
+                    self._consecutive_failures += 1
+                if self._latest_frame is None or self._consecutive_failures >= self._max_consecutive_failures:
                     self._latest_ok = False
