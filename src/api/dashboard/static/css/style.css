@@ -456,3 +456,46 @@ button:hover {
     background: rgba(0, 255, 255, 0.18);
     color: cyan;
 }
+
+.integration-card {
+    border: 1px solid rgba(0, 255, 255, 0.32);
+}
+
+.module-card {
+    border: 1px solid rgba(47, 111, 255, 0.32);
+}
+
+.demo-card {
+    border: 1px solid rgba(255, 166, 0, 0.32);
+}
+
+.integration-score-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 10px 0 16px;
+}
+
+.integration-score {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.integration-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.integration-ready {
+    background: rgba(31, 203, 116, 0.2);
+    color: #1fcb74;
+}
+
+.integration-check {
+    background: rgba(240, 195, 48, 0.2);
+    color: #f0c330;
+}
