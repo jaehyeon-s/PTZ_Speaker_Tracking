@@ -6,15 +6,21 @@ import math
 router = APIRouter()
 
 
-def get_scenario():
-    """
-    테스트용 시나리오.
-    실제 연동 전까지는 시간 흐름에 따라 추적 모드와 복구 상태가 바뀌는 것처럼 보이게 함.
-    """
-    t = time.time()
-    phase = int(t) % 32
+def ensure_base_state():
+    app_state.setdefault("detector", "YOLO26n (NCNN)")
+    app_state.setdefault("tracker", "ByteTrack")
+    app_state.setdefault("fps", 27.2)
+    app_state.setdefault("target_id", "None")
+    app_state.setdefault("zone_lock", "ON")
+    app_state.setdefault("ptz_status", "READY")
+    app_state.setdefault("session_state", "IDLE")
 
-    if phase < 8:
+
+def get_scenario():
+    t = time.time()
+    phase = int(t) % 40
+
+    if phase < 10:
         return {
             "tracking_mode": "ZONE_TRACKING",
             "camera_mode": "PRESENTER",
@@ -36,9 +42,11 @@ def get_scenario():
             "tracking_engine": "Qon4K6012XN Auto Tracking",
             "conflict_status": "NONE",
             "control_policy": "Pi monitors mismatch, camera performs tracking",
+            "demo_step": 1,
+            "demo_action": "Presenter registered",
         }
 
-    elif phase < 16:
+    elif phase < 20:
         return {
             "tracking_mode": "CLASS_TRACKING",
             "camera_mode": "PRESENTER",
@@ -60,9 +68,11 @@ def get_scenario():
             "tracking_engine": "YOLO Class + Camera Tracking",
             "conflict_status": "NONE",
             "control_policy": "Class result is used as tracking reference",
+            "demo_step": 2,
+            "demo_action": "Auto Tracking monitoring",
         }
 
-    elif phase < 24:
+    elif phase < 30:
         return {
             "tracking_mode": "MARKER_TRACKING",
             "camera_mode": "ZONE",
@@ -84,6 +94,8 @@ def get_scenario():
             "tracking_engine": "Zone Lock Recovery",
             "conflict_status": "PREVENTED",
             "control_policy": "Pi blocks wrong target and switches camera to zone mode",
+            "demo_step": 3,
+            "demo_action": "Mismatch detected, zone fallback",
         }
 
     else:
@@ -108,6 +120,8 @@ def get_scenario():
             "tracking_engine": "Qon4K6012XN Auto Tracking",
             "conflict_status": "NONE",
             "control_policy": "Camera tracking resumed after recovery",
+            "demo_step": 4,
+            "demo_action": "Recovery completed",
         }
 
 
@@ -139,7 +153,40 @@ def calc_health_score(scenario, track_stability, pan_direction, tilt_direction):
     return max(score, 0)
 
 
+def calc_integration_readiness(scenario):
+    score = 100
+
+    if scenario["aruco_status"] == "NOT_DETECTED":
+        score -= 10
+
+    if scenario["reid_state"] == "SUSPENDED":
+        score -= 15
+
+    if scenario["conflict_status"] == "PREVENTED":
+        score -= 5
+
+    osnet_backend = "STANDBY"
+    osnet_note = "ONNX model path and threshold are not applied yet"
+
+    return {
+        "score": max(score, 0),
+        "level": "READY" if score >= 85 else "CHECK_REQUIRED",
+        "data_source": "MOCK_FALLBACK",
+        "backend_connection": "STANDBY",
+        "vision_module": "READY",
+        "reid_backend": "HSV_BASELINE",
+        "osnet_backend": osnet_backend,
+        "osnet_note": osnet_note,
+        "camera_module": "Qon4K6012XN_READY",
+        "ptz_loop": "SIMULATION_READY",
+        "api_contract": "READY",
+        "next_action": "Replace mock status payload with team module outputs",
+    }
+
+
 def build_mock_detections():
+    ensure_base_state()
+
     t = time.time()
     offset = int(70 * math.sin(t))
     scenario = get_scenario()
@@ -224,6 +271,7 @@ def build_mock_detections():
         health_level = "WARNING"
 
     warning_count = 1 if scenario["reid_state"] == "SUSPENDED" else 0
+    integration = calc_integration_readiness(scenario)
 
     app_state["debug"] = {
         "total_detections": len(detections),
@@ -250,7 +298,7 @@ def build_mock_detections():
         "threshold": 0.70,
         "event": scenario["reid_event"],
         "event_level": scenario["reid_event_level"],
-        "method": "Color Histogram / OSNet-style Backend",
+        "method": "HSV Histogram / OSNet-style ONNX Backend",
         "registered_target": "Professor",
         "recovery_mode": scenario["recovery_mode"],
     }
@@ -288,6 +336,38 @@ def build_mock_detections():
         "control_policy": scenario["control_policy"],
     }
 
+    app_state["integration"] = integration
+
+    app_state["module_connection"] = {
+        "vision_backend": "READY",
+        "bytetrack": "READY",
+        "zone_lock": "READY",
+        "reid_hsv": "READY",
+        "reid_osnet": "STANDBY",
+        "aruco_marker": scenario["aruco_status"],
+        "ptz_camera": "READY",
+        "dashboard_api": "READY",
+    }
+
+    app_state["api_contract"] = {
+        "status_endpoint": "/api/status OK",
+        "detections_endpoint": "/api/detections OK",
+        "required_fields": "detections, tracking_mode, recovery, control_ownership, integration",
+        "missing_fields": "NONE",
+        "integration_note": "Team modules can replace mock payload without changing dashboard UI",
+    }
+
+    app_state["demo_flow"] = {
+        "current_step": scenario["demo_step"],
+        "current_action": scenario["demo_action"],
+        "presenter_registration": "READY",
+        "camera_presenter_mode": "READY",
+        "auto_tracking": "ON",
+        "mismatch_monitor": "ON",
+        "zone_fallback": "READY",
+        "recovery_result": scenario["recovery_state"],
+    }
+
     return detections
 
 
@@ -304,5 +384,6 @@ def get_detections():
 
 @router.post("/api/zone/toggle")
 def toggle_zone_lock():
+    ensure_base_state()
     app_state["zone_lock"] = "OFF" if app_state["zone_lock"] == "ON" else "ON"
     return {"status": app_state["zone_lock"]}
