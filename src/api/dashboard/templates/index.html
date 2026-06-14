@@ -69,7 +69,7 @@
                     <p>[INFO] RTSP stream connected</p>
                     <p>[INFO] YOLO26n NCNN initialized</p>
                     <p>[INFO] ByteTrack + Zone Lock ready</p>
-                    <p>[INFO] Tracking Mode Dashboard ready</p>
+                    <p>[INFO] Final Integration Dashboard ready</p>
                 </div>
             </div>
         </div>
@@ -87,6 +87,43 @@
                 <p>Re-ID: <span id="healthReidValue">-</span></p>
                 <p>PTZ: <span id="healthPtzValue">-</span></p>
                 <p>Warnings: <span id="healthWarningsValue">-</span></p>
+            </div>
+
+            <div class="status-card integration-card">
+                <h2>Integration Readiness</h2>
+                <div class="integration-score-wrap">
+                    <span id="integrationScoreValue" class="integration-score">-</span>
+                    <span class="health-total">/ 100</span>
+                </div>
+                <p>Level: <span id="integrationLevelValue" class="integration-badge">-</span></p>
+                <p>Data Source: <span id="dataSourceValue">-</span></p>
+                <p>Backend Connection: <span id="backendConnectionValue">-</span></p>
+                <p>API Contract: <span id="apiContractValue">-</span></p>
+                <p>Next Action: <span id="nextActionValue">-</span></p>
+            </div>
+
+            <div class="status-card module-card">
+                <h2>Module Connection</h2>
+                <p>Vision Backend: <span id="visionBackendValue">-</span></p>
+                <p>ByteTrack: <span id="bytetrackValue">-</span></p>
+                <p>Zone Lock: <span id="zoneModuleValue">-</span></p>
+                <p>Re-ID HSV: <span id="reidHsvValue">-</span></p>
+                <p>Re-ID OSNet: <span id="reidOsnetValue">-</span></p>
+                <p>ArUco Marker: <span id="arucoModuleValue">-</span></p>
+                <p>PTZ Camera: <span id="ptzCameraValue">-</span></p>
+                <p>Dashboard API: <span id="dashboardApiValue">-</span></p>
+            </div>
+
+            <div class="status-card demo-card">
+                <h2>Final Demo Flow</h2>
+                <p>Current Step: <span id="demoStepValue">-</span></p>
+                <p>Current Action: <span id="demoActionValue">-</span></p>
+                <p>Presenter Registration: <span id="presenterRegistrationValue">-</span></p>
+                <p>Camera Presenter Mode: <span id="cameraPresenterModeValue">-</span></p>
+                <p>Auto Tracking: <span id="autoTrackingValue">-</span></p>
+                <p>Mismatch Monitor: <span id="mismatchMonitorValue">-</span></p>
+                <p>Zone Fallback: <span id="zoneFallbackValue">-</span></p>
+                <p>Recovery Result: <span id="recoveryResultValue">-</span></p>
             </div>
 
             <div class="status-card mode-card">
