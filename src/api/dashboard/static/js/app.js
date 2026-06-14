@@ -7,6 +7,8 @@ let lastHealthLevel = null;
 let lastTrackingMode = null;
 let lastRecoveryState = null;
 let lastConflictStatus = null;
+let lastIntegrationLevel = null;
+let lastDemoStep = null;
 let reidTimeline = [];
 
 function setText(id, value) {
@@ -72,6 +74,20 @@ function setHealthLevelStyle(level) {
     }
 }
 
+function setIntegrationLevelStyle(level) {
+    const badge = document.getElementById("integrationLevelValue");
+    if (!badge) return;
+
+    badge.textContent = level;
+    badge.classList.remove("integration-ready", "integration-check");
+
+    if (level === "READY") {
+        badge.classList.add("integration-ready");
+    } else {
+        badge.classList.add("integration-check");
+    }
+}
+
 function setModeChipStyle(mode) {
     const chip = document.getElementById("currentModeValue");
     if (!chip) return;
@@ -133,6 +149,49 @@ async function fetchStatus() {
             }
 
             lastHealthLevel = data.health.level;
+        }
+
+        if (data.integration) {
+            setText("integrationScoreValue", data.integration.score);
+            setIntegrationLevelStyle(data.integration.level);
+            setText("dataSourceValue", data.integration.data_source);
+            setText("backendConnectionValue", data.integration.backend_connection);
+            setText("apiContractValue", data.integration.api_contract);
+            setText("nextActionValue", data.integration.next_action);
+
+            if (lastIntegrationLevel !== null && lastIntegrationLevel !== data.integration.level) {
+                addLog(`Integration Readiness changed: ${lastIntegrationLevel} → ${data.integration.level}`);
+            }
+
+            lastIntegrationLevel = data.integration.level;
+        }
+
+        if (data.module_connection) {
+            setText("visionBackendValue", data.module_connection.vision_backend);
+            setText("bytetrackValue", data.module_connection.bytetrack);
+            setText("zoneModuleValue", data.module_connection.zone_lock);
+            setText("reidHsvValue", data.module_connection.reid_hsv);
+            setText("reidOsnetValue", data.module_connection.reid_osnet);
+            setText("arucoModuleValue", data.module_connection.aruco_marker);
+            setText("ptzCameraValue", data.module_connection.ptz_camera);
+            setText("dashboardApiValue", data.module_connection.dashboard_api);
+        }
+
+        if (data.demo_flow) {
+            setText("demoStepValue", data.demo_flow.current_step);
+            setText("demoActionValue", data.demo_flow.current_action);
+            setText("presenterRegistrationValue", data.demo_flow.presenter_registration);
+            setText("cameraPresenterModeValue", data.demo_flow.camera_presenter_mode);
+            setText("autoTrackingValue", data.demo_flow.auto_tracking);
+            setText("mismatchMonitorValue", data.demo_flow.mismatch_monitor);
+            setText("zoneFallbackValue", data.demo_flow.zone_fallback);
+            setText("recoveryResultValue", data.demo_flow.recovery_result);
+
+            if (lastDemoStep !== null && lastDemoStep !== data.demo_flow.current_step) {
+                addLog(`Final Demo Step changed: ${lastDemoStep} → ${data.demo_flow.current_step}`);
+            }
+
+            lastDemoStep = data.demo_flow.current_step;
         }
 
         if (data.tracking_mode) {
@@ -378,7 +437,7 @@ document.getElementById("zoneBtn").onclick = () => callAPI("/api/zone/toggle", "
 
 fetchStatus();
 fetchDetections();
-addLog("Tracking Mode Dashboard initialized");
+addLog("Final Integration Dashboard initialized");
 
 setInterval(fetchStatus, 1000);
 setInterval(fetchDetections, 1000);
