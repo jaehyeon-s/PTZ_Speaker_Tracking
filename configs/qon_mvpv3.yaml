@@ -42,7 +42,12 @@ reid:
   identity_margin: 0.08
   center_margin: 0.12
   identity_center_dead_zone: 0.18
-  identity_hold_limit: 30
+  # Lower than the default 30 so a vanished presenter reaches LOST faster.
+  identity_hold_limit: 12
+  # Keep tracking the same person: a different candidate must beat the current
+  # one by this score, and stay within position_gate_ratio of the last bbox.
+  switch_margin: 0.15
+  position_gate_ratio: 0.5
 
 camera:
   url: http://192.168.11.88
@@ -58,6 +63,9 @@ ptz:
   min_speed: 2
   max_speed: 10
   timeout: 1.0
+  # Zoom in/out so the registered presenter fills ~60% of the frame height (upper body).
+  zoom: true
+  target_height_ratio: 0.6
 
 logging:
   csv: logs/identity_supervisor.csv

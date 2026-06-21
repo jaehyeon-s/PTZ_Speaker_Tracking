@@ -119,6 +119,32 @@ class QonTrackingControlTests(unittest.TestCase):
         self.assertIn("ptzcmd&right&", move_url)
         self.assertEqual(stop_url, "http://camera/cgi-bin/ptzctrl.cgi?ptzcmd&ptzstop&10&10")
 
+    def test_velocity_ptz_zooms_in_when_centered_subject_too_small(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+        ptz = QonVelocityPTZController(
+            control,
+            dead_zone_ratio=0.2,
+            zoom_enabled=True,
+            target_height_ratio=0.6,
+            zoom_speed=3,
+        )
+
+        action = ptz.follow_bbox((90, 45, 110, 55), (100, 200, 3))
+        zoom_url = opener.requests[-1][0].full_url
+
+        self.assertTrue(action.startswith("zoomin:"))
+        self.assertIn("ptzcmd&zoomin&3", zoom_url)
+
+    def test_velocity_ptz_skips_zoom_when_disabled(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+        ptz = QonVelocityPTZController(control, dead_zone_ratio=0.2, zoom_enabled=False)
+
+        action = ptz.follow_bbox((90, 45, 110, 55), (100, 200, 3))
+
+        self.assertEqual(action, "ptzstop")
+
     def test_async_velocity_ptz_closes_with_stop_command(self):
         class RecordingControl:
             def __init__(self):

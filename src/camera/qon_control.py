@@ -267,19 +267,27 @@ class QonVelocityPTZController:
         command_ttl_seconds: float = 0.35,
         async_commands: bool = False,
         close_join_timeout_seconds: float = 1.0,
+        zoom_enabled: bool = False,
+        target_height_ratio: float = 0.6,
+        zoom_tolerance: float = 0.08,
+        zoom_speed: int = 3,
     ) -> None:
         self.control = control
         self.dead_zone_ratio = dead_zone_ratio
         self.min_speed = min_speed
         self.max_speed = max(min_speed, max_speed)
         self.command_ttl_seconds = command_ttl_seconds
+        self.zoom_enabled = zoom_enabled
+        self.target_height_ratio = target_height_ratio
+        self.zoom_tolerance = zoom_tolerance
+        self.zoom_speed = max(1, zoom_speed)
         self.async_commands = async_commands
         self.last_command = "ptzstop"
         self.last_speed = 0
         self.last_sent_at = 0.0
         self.last_error: Exception | None = None
         self.close_join_timeout_seconds = close_join_timeout_seconds
-        self._pending_command: tuple[str, int, int] | None = None
+        self._pending_command: tuple[str, int, int | None] | None = None
         self._closed = False
         self._condition = threading.Condition()
         self._worker: threading.Thread | None = None
@@ -292,16 +300,33 @@ class QonVelocityPTZController:
             self.stop()
             return "ptzstop"
         command, speed = self._command_for_bbox(bbox, frame_shape)
+        speed_y: int | None = speed
+        if command == "ptzstop":
+            # Centered on pan/tilt; adjust zoom so the subject fills the target height.
+            command, speed = self._zoom_for_bbox(bbox, frame_shape)
+            speed_y = None
         if command == "ptzstop":
             self.stop()
             return command
         now = time.monotonic()
         if command != self.last_command or speed != self.last_speed or now - self.last_sent_at >= self.command_ttl_seconds:
-            self._send(command, speed, speed)
+            self._send(command, speed, speed_y)
             self.last_command = command
             self.last_speed = speed
             self.last_sent_at = now
         return f"{command}:{speed}"
+
+    def _zoom_for_bbox(self, bbox: tuple[int, int, int, int], frame_shape) -> tuple[str, int]:
+        if not self.zoom_enabled:
+            return "ptzstop", 0
+        frame_h = frame_shape[0]
+        _, y1, _, y2 = bbox
+        height_ratio = (y2 - y1) / max(float(frame_h), 1.0)
+        if height_ratio < self.target_height_ratio - self.zoom_tolerance:
+            return "zoomin", self.zoom_speed
+        if height_ratio > self.target_height_ratio + self.zoom_tolerance:
+            return "zoomout", self.zoom_speed
+        return "ptzstop", 0
 
     def stop(self) -> None:
         if self.last_command != "ptzstop":
@@ -341,7 +366,7 @@ class QonVelocityPTZController:
         scaled = min(1.0, max(0.0, (magnitude - self.dead_zone_ratio) / max(1.0 - self.dead_zone_ratio, 1e-6)))
         return direction, int(round(self.min_speed + scaled * speed_span))
 
-    def _send(self, command: str, speed_x: int, speed_y: int) -> None:
+    def _send(self, command: str, speed_x: int, speed_y: int | None) -> None:
         if not self.async_commands:
             self.control.ptz_command(command, speed_x, speed_y)
             return

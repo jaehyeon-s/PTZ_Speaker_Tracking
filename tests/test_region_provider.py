@@ -107,6 +107,36 @@ class RegionProviderTests(unittest.TestCase):
         self.assertEqual(provider.last_observation.state, TrackingState.HOLD)
         self.assertEqual(provider.last_observation.hold_count, 1)
 
+    def test_identity_provider_resists_target_steal_within_switch_margin(self):
+        frame = Frame()
+        target = PersonDetection((10, 20, 20, 40))
+        stealer = PersonDetection((40, 20, 20, 40))
+        detector = FakeDetector([target, stealer])
+        matcher = FakeMatcher({(10, 20, 30, 60): 0.50, (40, 20, 60, 60): 0.60})
+        provider = IdentityMatchedRegionProvider(
+            detector, matcher, weak_min_score=0.25, identity_margin=0.05, switch_margin=0.15
+        )
+        provider.last_trusted_bbox = (10, 20, 30, 60)
+
+        bbox, _ = provider.region_for_frame(1, frame)
+
+        self.assertEqual(bbox, (10, 20, 30, 60))
+
+    def test_identity_provider_switches_when_other_beats_switch_margin(self):
+        frame = Frame()
+        target = PersonDetection((10, 20, 20, 40))
+        stealer = PersonDetection((40, 20, 20, 40))
+        detector = FakeDetector([target, stealer])
+        matcher = FakeMatcher({(10, 20, 30, 60): 0.40, (40, 20, 60, 60): 0.70})
+        provider = IdentityMatchedRegionProvider(
+            detector, matcher, weak_min_score=0.25, identity_margin=0.05, switch_margin=0.15
+        )
+        provider.last_trusted_bbox = (10, 20, 30, 60)
+
+        bbox, _ = provider.region_for_frame(1, frame)
+
+        self.assertEqual(bbox, (40, 20, 60, 60))
+
     def test_identity_provider_clears_last_people_before_registration(self):
         frame = Frame()
         detector = FakeDetector([PersonDetection((10, 20, 20, 40))])

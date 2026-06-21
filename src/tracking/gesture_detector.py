@@ -17,8 +17,9 @@ class GestureFallbackDetector:
     Without a pose model, it returns no target instead of guessing aggressively.
     """
 
-    def __init__(self, hold_seconds: float = 1.0) -> None:
+    def __init__(self, hold_seconds: float = 1.0, debug: bool = False) -> None:
         self.hold_seconds = hold_seconds
+        self.debug = debug
         self._candidate_index: Optional[int] = None
         self._candidate_since: Optional[float] = None
         self._pose = None
@@ -62,6 +63,13 @@ class GestureFallbackDetector:
             self._init_pose()
         if self._pose is None:
             return set()
+
+        raised_indices = self._raised_hand_indices(frame, people)
+        if self.debug and raised_indices:
+            print(f"[GESTURE] raised hand detected for person indices {sorted(raised_indices)}")
+        return raised_indices
+
+    def _raised_hand_indices(self, frame, people: Iterable[PersonDetection]) -> set[int]:
 
         import cv2
 
@@ -108,9 +116,15 @@ class GestureFallbackDetector:
 
             solutions = getattr(mp, "solutions", None)
             if solutions is None or not hasattr(solutions, "pose"):
+                if self.debug:
+                    print("[GESTURE] MediaPipe installed but mp.solutions.pose is unavailable (Tasks-only build)")
                 return
             self._mp_pose = solutions.pose
             self._pose = self._mp_pose.Pose(static_image_mode=False, model_complexity=0)
-        except Exception:
+            if self.debug:
+                print("[GESTURE] MediaPipe pose initialized (gesture registration enabled)")
+        except Exception as exc:
             self._mp_pose = None
             self._pose = None
+            if self.debug:
+                print(f"[GESTURE] MediaPipe pose unavailable: {exc}")

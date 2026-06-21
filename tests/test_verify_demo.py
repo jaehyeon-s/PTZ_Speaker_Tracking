@@ -212,6 +212,8 @@ class VerifyDemoSmokeTests(unittest.TestCase):
             ptz_dead_zone=0.12,
             ptz_min_speed=2,
             ptz_max_speed=10,
+            ptz_zoom=False,
+            ptz_target_height_ratio=0.6,
         )
 
         controller = build_ptz_controller(args, object())

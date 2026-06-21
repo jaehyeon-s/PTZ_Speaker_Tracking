@@ -154,6 +154,18 @@ def parse_args() -> argparse.Namespace:
         help="Consecutive untrusted identity frames before declaring LOST",
     )
     parser.add_argument(
+        "--identity-switch-margin",
+        type=float,
+        default=config_value(config, "identity_switch_margin", "reid.switch_margin", default=0.15),
+        help="Score a different person must beat the currently tracked one by before the track switches",
+    )
+    parser.add_argument(
+        "--identity-position-gate",
+        type=float,
+        default=config_value(config, "identity_position_gate", "reid.position_gate_ratio", default=0.5),
+        help="Max distance (fraction of frame width) a candidate may be from the last track to count as the same person",
+    )
+    parser.add_argument(
         "--marker-positive",
         action="store_true",
         default=bool(config_value(config, "marker_positive", "registration.marker_positive", default=False)),
@@ -210,6 +222,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ptz-min-speed", type=int, default=config_value(config, "ptz_min_speed", "ptz.min_speed", default=2))
     parser.add_argument("--ptz-max-speed", type=int, default=config_value(config, "ptz_max_speed", "ptz.max_speed", default=10))
     parser.add_argument("--ptz-timeout", type=float, default=config_value(config, "ptz_timeout", "ptz.timeout", default=1.0))
+    parser.add_argument(
+        "--ptz-zoom",
+        action="store_true",
+        default=bool(config_value(config, "ptz_zoom", "ptz.zoom", default=False)),
+        help="Zoom in/out so the tracked subject fills the target frame height",
+    )
+    parser.add_argument(
+        "--ptz-target-height-ratio",
+        type=float,
+        default=config_value(config, "ptz_target_height_ratio", "ptz.target_height_ratio", default=0.6),
+        help="Desired tracked-subject bbox height as a fraction of frame height (used with --ptz-zoom)",
+    )
     parser.add_argument(
         "--recovery-action",
         choices=("none", "stop", "home", "zoomout"),
@@ -349,7 +373,7 @@ def main() -> int:
         else None
     )
     gesture_detector = (
-        GestureFallbackDetector()
+        GestureFallbackDetector(debug=args.debug_detector)
         if args.registration_mode in ("gesture", "marker-or-gesture")
         else None
     )
@@ -627,6 +651,8 @@ def build_region_provider(args, matcher):
             center_dead_zone_ratio=args.identity_center_dead_zone,
             mismatch_limit=args.mismatch_limit,
             hold_limit=args.identity_hold_limit,
+            switch_margin=args.identity_switch_margin,
+            position_gate_ratio=args.identity_position_gate,
         )
     return CenterCropRegionProvider(args.center_width_ratio, args.center_height_ratio)
 
@@ -720,6 +746,8 @@ def build_ptz_controller(args, camera_control):
         min_speed=args.ptz_min_speed,
         max_speed=args.ptz_max_speed,
         async_commands=True,
+        zoom_enabled=args.ptz_zoom,
+        target_height_ratio=args.ptz_target_height_ratio,
     )
 
 

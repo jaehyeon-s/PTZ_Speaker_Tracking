@@ -99,6 +99,8 @@ class IdentityMatchedRegionProvider:
         center_dead_zone_ratio: float = 0.18,
         mismatch_limit: int = 10,
         hold_limit: int = 30,
+        switch_margin: float = 0.15,
+        position_gate_ratio: float = 0.5,
     ) -> None:
         self.detector = detector
         self.matcher = matcher
@@ -109,6 +111,8 @@ class IdentityMatchedRegionProvider:
         self.center_dead_zone_ratio = center_dead_zone_ratio
         self.mismatch_limit = max(1, mismatch_limit)
         self.hold_limit = max(1, hold_limit)
+        self.switch_margin = switch_margin
+        self.position_gate_ratio = position_gate_ratio
         self.last_trusted_bbox: BBox | None = None
         self.last_people: list[PersonDetection] = []
         self.hold_count = 0
@@ -141,11 +145,12 @@ class IdentityMatchedRegionProvider:
         scored = [(candidate, self.matcher.score(frame, candidate.bbox)) for candidate in candidates]
         scored.sort(key=lambda item: item[1], reverse=True)
         best, best_score = scored[0]
-        second_score = scored[1][1] if len(scored) > 1 else 0.0
+        best, best_score, second_score, reliable = self._select_with_continuity(
+            scored, best, best_score, frame.shape
+        )
         center_candidate, center_score = self._center_candidate(scored, frame.shape)
         identity_delta = best_score - second_score
         center_delta = best_score - center_score
-        reliable = best_score >= self.weak_min_score and identity_delta >= self.identity_margin
 
         if not reliable:
             return self._hold_or_lost(
@@ -236,6 +241,39 @@ class IdentityMatchedRegionProvider:
             self.mismatch_count,
         )
         return bbox, source
+
+    def _select_with_continuity(self, scored, best, best_score, frame_shape):
+        """Prefer the candidate near the last tracked position so a different
+        person who momentarily scores higher cannot steal the track. Switching
+        targets requires beating the incumbent by ``switch_margin``."""
+        chosen, chosen_score = best, best_score
+        switched = False
+        if self.last_trusted_bbox is not None:
+            incumbent = self._incumbent_candidate(scored, frame_shape)
+            if incumbent is not None:
+                inc_candidate, inc_score = incumbent
+                if inc_score >= self.weak_min_score and best_score - inc_score < self.switch_margin:
+                    chosen, chosen_score = inc_candidate, inc_score
+                    switched = inc_candidate.bbox != best.bbox
+        second_score = max((score for candidate, score in scored if candidate.bbox != chosen.bbox), default=0.0)
+        if switched:
+            reliable = chosen_score >= self.weak_min_score
+        else:
+            reliable = chosen_score >= self.weak_min_score and (chosen_score - second_score) >= self.identity_margin
+        return chosen, chosen_score, second_score, reliable
+
+    def _incumbent_candidate(self, scored, frame_shape) -> tuple[Candidate, float] | None:
+        frame_w = frame_shape[1]
+        gate = self.position_gate_ratio * float(frame_w)
+        last_center = _bbox_center(self.last_trusted_bbox)
+        nearest = None
+        for candidate, score in scored:
+            distance = _distance_sq(_bbox_center(candidate.bbox), last_center) ** 0.5
+            if distance <= gate and (nearest is None or distance < nearest[0]):
+                nearest = (distance, candidate, score)
+        if nearest is None:
+            return None
+        return nearest[1], nearest[2]
 
     def _center_candidate(self, scored, frame_shape) -> tuple[Candidate | None, float]:
         frame_h, frame_w = frame_shape[:2]
