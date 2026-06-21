@@ -69,141 +69,15 @@
                     <p>[INFO] RTSP stream connected</p>
                     <p>[INFO] YOLO26n NCNN initialized</p>
                     <p>[INFO] ByteTrack + Zone Lock ready</p>
-                    <p>[INFO] Final Integration Dashboard ready</p>
+                    <p>[INFO] Priority Dashboard Layout ready</p>
                 </div>
             </div>
         </div>
 
         <aside class="right-panel">
 
-            <div class="status-card health-card">
-                <h2>System Health</h2>
-                <div class="health-score-wrap">
-                    <span id="healthScoreValue" class="health-score">-</span>
-                    <span class="health-total">/ 100</span>
-                </div>
-                <p>Level: <span id="healthLevelValue" class="health-badge">-</span></p>
-                <p>Tracking: <span id="healthTrackingValue">-</span></p>
-                <p>Re-ID: <span id="healthReidValue">-</span></p>
-                <p>PTZ: <span id="healthPtzValue">-</span></p>
-                <p>Warnings: <span id="healthWarningsValue">-</span></p>
-            </div>
-
-            <div class="status-card integration-card">
-                <h2>Integration Readiness</h2>
-                <div class="integration-score-wrap">
-                    <span id="integrationScoreValue" class="integration-score">-</span>
-                    <span class="health-total">/ 100</span>
-                </div>
-                <p>Level: <span id="integrationLevelValue" class="integration-badge">-</span></p>
-                <p>Data Source: <span id="dataSourceValue">-</span></p>
-                <p>Backend Connection: <span id="backendConnectionValue">-</span></p>
-                <p>API Contract: <span id="apiContractValue">-</span></p>
-                <p>Next Action: <span id="nextActionValue">-</span></p>
-            </div>
-
-            <div class="status-card module-card">
-                <h2>Module Connection</h2>
-                <p>Vision Backend: <span id="visionBackendValue">-</span></p>
-                <p>ByteTrack: <span id="bytetrackValue">-</span></p>
-                <p>Zone Lock: <span id="zoneModuleValue">-</span></p>
-                <p>Re-ID HSV: <span id="reidHsvValue">-</span></p>
-                <p>Re-ID OSNet: <span id="reidOsnetValue">-</span></p>
-                <p>ArUco Marker: <span id="arucoModuleValue">-</span></p>
-                <p>PTZ Camera: <span id="ptzCameraValue">-</span></p>
-                <p>Dashboard API: <span id="dashboardApiValue">-</span></p>
-            </div>
-
-            <div class="status-card demo-card">
-                <h2>Final Demo Flow</h2>
-                <p>Current Step: <span id="demoStepValue">-</span></p>
-                <p>Current Action: <span id="demoActionValue">-</span></p>
-                <p>Presenter Registration: <span id="presenterRegistrationValue">-</span></p>
-                <p>Camera Presenter Mode: <span id="cameraPresenterModeValue">-</span></p>
-                <p>Auto Tracking: <span id="autoTrackingValue">-</span></p>
-                <p>Mismatch Monitor: <span id="mismatchMonitorValue">-</span></p>
-                <p>Zone Fallback: <span id="zoneFallbackValue">-</span></p>
-                <p>Recovery Result: <span id="recoveryResultValue">-</span></p>
-            </div>
-
-            <div class="status-card mode-card">
-                <h2>Tracking Mode</h2>
-                <p>Current Mode: <span id="currentModeValue" class="mode-chip">-</span></p>
-                <p>Camera Mode: <span id="cameraModeValue">-</span></p>
-                <p>Tracking Source: <span id="trackingSourceValue">-</span></p>
-                <p>Target Type: <span id="targetTypeValue">-</span></p>
-                <p>ArUco Status: <span id="arucoStatusValue">-</span></p>
-                <p>Mode Reason: <span id="modeReasonValue">-</span></p>
-            </div>
-
-            <div class="status-card recovery-card">
-                <h2>Recovery Action</h2>
-                <p>Mismatch Count: <span id="mismatchCountValue">-</span></p>
-                <p>Recovery Trigger: <span id="recoveryTriggerValue">-</span></p>
-                <p>Current Action: <span id="recoveryActionValue">-</span></p>
-                <p>Recovery State: <span id="recoveryStateValue">-</span></p>
-                <p>Last Recovery: <span id="lastRecoveryValue">-</span></p>
-            </div>
-
-            <div class="status-card ownership-card">
-                <h2>Control Ownership</h2>
-                <p>Control Owner: <span id="controlOwnerValue">-</span></p>
-                <p>Tracking Engine: <span id="trackingEngineValue">-</span></p>
-                <p>Conflict Status: <span id="conflictStatusValue">-</span></p>
-                <p>Control Policy: <span id="controlPolicyValue">-</span></p>
-            </div>
-
-            <div class="status-card">
-                <h2>System Status</h2>
-                <p>Detector: <span id="detectorValue">-</span></p>
-                <p>Tracker: <span id="trackerValue">-</span></p>
-                <p>FPS: <span id="fpsValue">-</span></p>
-                <p>Target ID: <span id="targetIdValue">-</span></p>
-                <p>Zone Lock: <span id="zoneLockValue">-</span></p>
-                <p>PTZ: <span id="ptzValue">-</span></p>
-                <p>Session: <span id="sessionValue">-</span></p>
-            </div>
-
-            <div class="status-card">
-                <h2>Tracking Debug</h2>
-                <p>Current Target: <span id="debugTargetValue">-</span></p>
-                <p>Total Detections: <span id="totalDetectionsValue">-</span></p>
-                <p>Inside Zone: <span id="insideZoneValue">-</span></p>
-                <p>Outside Zone: <span id="outsideZoneValue">-</span></p>
-                <p>Track Stability: <span id="trackStabilityValue">-</span></p>
-                <p>Last Re-ID: <span id="lastReidValue">-</span></p>
-                <p>ID Switch Count: <span id="idSwitchValue">-</span></p>
-            </div>
-
-            <div class="status-card">
-                <h2>Re-ID Monitor</h2>
-                <p>Re-ID State: <span id="reidStateValue">-</span></p>
-                <p>Current Score: <span id="reidScoreValue">-</span></p>
-                <p>Threshold: <span id="reidThresholdValue">-</span></p>
-                <p>Last Event: <span id="reidEventValue">-</span></p>
-                <p>Method: <span id="reidMethodValue">-</span></p>
-                <p>Registered Target: <span id="registeredTargetValue">-</span></p>
-                <p>Recovery Mode: <span id="recoveryModeValue">-</span></p>
-            </div>
-
-            <div class="status-card">
-                <h2>Re-ID Timeline</h2>
-                <div id="reidTimelineBox" class="timeline-box">
-                    <p class="timeline-empty">No Re-ID events yet</p>
-                </div>
-            </div>
-
-            <div class="status-card">
-                <h2>Virtual PTZ Simulator</h2>
-                <p>Pan Direction: <span id="panDirectionValue">-</span></p>
-                <p>Tilt Direction: <span id="tiltDirectionValue">-</span></p>
-                <p>Zoom State: <span id="zoomStateValue">-</span></p>
-                <p>Offset X: <span id="offsetXValue">-</span> px</p>
-                <p>Offset Y: <span id="offsetYValue">-</span> px</p>
-            </div>
-
-            <div class="control-card">
-                <h2>Camera Control</h2>
+            <div class="control-card priority-control-card">
+                <h2>Camera Control (카메라 수동 제어)</h2>
 
                 <div class="control-group">
                     <p class="group-title">세션 제어</p>
@@ -235,6 +109,133 @@
                     <button id="zoneBtn">Zone Lock</button>
                 </div>
             </div>
+
+            <div class="status-card demo-card">
+                <h2>Final Demo Flow (최종 시연 흐름)</h2>
+                <p>Current Step: <span id="demoStepValue">-</span></p>
+                <p>Current Action: <span id="demoActionValue">-</span></p>
+                <p>Presenter Registration: <span id="presenterRegistrationValue">-</span></p>
+                <p>Camera Presenter Mode: <span id="cameraPresenterModeValue">-</span></p>
+                <p>Auto Tracking: <span id="autoTrackingValue">-</span></p>
+                <p>Mismatch Monitor: <span id="mismatchMonitorValue">-</span></p>
+                <p>Zone Fallback: <span id="zoneFallbackValue">-</span></p>
+                <p>Recovery Result: <span id="recoveryResultValue">-</span></p>
+            </div>
+
+            <div class="status-card health-card">
+                <h2>System Health (시스템 종합 상태)</h2>
+                <div class="health-score-wrap">
+                    <span id="healthScoreValue" class="health-score">-</span>
+                    <span class="health-total">/ 100</span>
+                </div>
+                <p>Level: <span id="healthLevelValue" class="health-badge">-</span></p>
+                <p>Tracking: <span id="healthTrackingValue">-</span></p>
+                <p>Re-ID: <span id="healthReidValue">-</span></p>
+                <p>PTZ: <span id="healthPtzValue">-</span></p>
+                <p>Warnings: <span id="healthWarningsValue">-</span></p>
+            </div>
+
+            <div class="status-card mode-card">
+                <h2>Tracking Mode (현재 추적 모드)</h2>
+                <p>Current Mode: <span id="currentModeValue" class="mode-chip">-</span></p>
+                <p>Camera Mode: <span id="cameraModeValue">-</span></p>
+                <p>Tracking Source: <span id="trackingSourceValue">-</span></p>
+                <p>Target Type: <span id="targetTypeValue">-</span></p>
+                <p>ArUco Status: <span id="arucoStatusValue">-</span></p>
+                <p>Mode Reason: <span id="modeReasonValue">-</span></p>
+            </div>
+
+            <div class="status-card recovery-card">
+                <h2>Recovery Action (복구 동작 상태)</h2>
+                <p>Mismatch Count: <span id="mismatchCountValue">-</span></p>
+                <p>Recovery Trigger: <span id="recoveryTriggerValue">-</span></p>
+                <p>Current Action: <span id="recoveryActionValue">-</span></p>
+                <p>Recovery State: <span id="recoveryStateValue">-</span></p>
+                <p>Last Recovery: <span id="lastRecoveryValue">-</span></p>
+            </div>
+
+            <div class="status-card">
+                <h2>Re-ID Monitor (재식별 상태)</h2>
+                <p>Re-ID State: <span id="reidStateValue">-</span></p>
+                <p>Current Score: <span id="reidScoreValue">-</span></p>
+                <p>Threshold: <span id="reidThresholdValue">-</span></p>
+                <p>Last Event: <span id="reidEventValue">-</span></p>
+                <p>Method: <span id="reidMethodValue">-</span></p>
+                <p>Registered Target: <span id="registeredTargetValue">-</span></p>
+                <p>Recovery Mode: <span id="recoveryModeValue">-</span></p>
+            </div>
+
+            <div class="status-card">
+                <h2>Virtual PTZ Simulator (가상 PTZ 시뮬레이터)</h2>
+                <p>Pan Direction: <span id="panDirectionValue">-</span></p>
+                <p>Tilt Direction: <span id="tiltDirectionValue">-</span></p>
+                <p>Zoom State: <span id="zoomStateValue">-</span></p>
+                <p>Offset X: <span id="offsetXValue">-</span> px</p>
+                <p>Offset Y: <span id="offsetYValue">-</span> px</p>
+            </div>
+
+            <div class="status-card ownership-card">
+                <h2>Control Ownership (제어권 상태)</h2>
+                <p>Control Owner: <span id="controlOwnerValue">-</span></p>
+                <p>Tracking Engine: <span id="trackingEngineValue">-</span></p>
+                <p>Conflict Status: <span id="conflictStatusValue">-</span></p>
+                <p>Control Policy: <span id="controlPolicyValue">-</span></p>
+            </div>
+
+            <div class="status-card integration-card">
+                <h2>Integration Readiness (통합 준비 상태)</h2>
+                <div class="integration-score-wrap">
+                    <span id="integrationScoreValue" class="integration-score">-</span>
+                    <span class="health-total">/ 100</span>
+                </div>
+                <p>Level: <span id="integrationLevelValue" class="integration-badge">-</span></p>
+                <p>Data Source: <span id="dataSourceValue">-</span></p>
+                <p>Backend Connection: <span id="backendConnectionValue">-</span></p>
+                <p>API Contract: <span id="apiContractValue">-</span></p>
+                <p>Next Action: <span id="nextActionValue">-</span></p>
+            </div>
+
+            <div class="status-card module-card">
+                <h2>Module Connection (모듈 연결 상태)</h2>
+                <p>Vision Backend: <span id="visionBackendValue">-</span></p>
+                <p>ByteTrack: <span id="bytetrackValue">-</span></p>
+                <p>Zone Lock: <span id="zoneModuleValue">-</span></p>
+                <p>Re-ID HSV: <span id="reidHsvValue">-</span></p>
+                <p>Re-ID OSNet: <span id="reidOsnetValue">-</span></p>
+                <p>ArUco Marker: <span id="arucoModuleValue">-</span></p>
+                <p>PTZ Camera: <span id="ptzCameraValue">-</span></p>
+                <p>Dashboard API: <span id="dashboardApiValue">-</span></p>
+            </div>
+
+            <div class="status-card">
+                <h2>System Status (기본 시스템 상태)</h2>
+                <p>Detector: <span id="detectorValue">-</span></p>
+                <p>Tracker: <span id="trackerValue">-</span></p>
+                <p>FPS: <span id="fpsValue">-</span></p>
+                <p>Target ID: <span id="targetIdValue">-</span></p>
+                <p>Zone Lock: <span id="zoneLockValue">-</span></p>
+                <p>PTZ: <span id="ptzValue">-</span></p>
+                <p>Session: <span id="sessionValue">-</span></p>
+            </div>
+
+            <div class="status-card">
+                <h2>Tracking Debug (추적 디버깅 정보)</h2>
+                <p>Current Target: <span id="debugTargetValue">-</span></p>
+                <p>Total Detections: <span id="totalDetectionsValue">-</span></p>
+                <p>Inside Zone: <span id="insideZoneValue">-</span></p>
+                <p>Outside Zone: <span id="outsideZoneValue">-</span></p>
+                <p>Track Stability: <span id="trackStabilityValue">-</span></p>
+                <p>Last Re-ID: <span id="lastReidValue">-</span></p>
+                <p>ID Switch Count: <span id="idSwitchValue">-</span></p>
+            </div>
+
+            <div class="status-card">
+                <h2>Re-ID Timeline (이벤트 기록)</h2>
+                <div id="reidTimelineBox" class="timeline-box">
+                    <p class="timeline-empty">No Re-ID events yet</p>
+                </div>
+            </div>
+
         </aside>
 
     </div>
