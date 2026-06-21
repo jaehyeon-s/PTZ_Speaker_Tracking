@@ -36,3 +36,6 @@ configs/local.yaml
 # Test artifacts
 .pytest_cache/
 .coverage
+
+runtime/*.json
+runtime/*.jsonl
