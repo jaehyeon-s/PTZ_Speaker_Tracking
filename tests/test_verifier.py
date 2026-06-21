@@ -9,8 +9,11 @@ class FakeMatcher:
 
     def __init__(self, scores=None):
         self.scores = iter(scores or [])
+        self.reference = None
+        self.reset_calls = 0
 
     def register(self, frame, bbox):
+        self.reference = bbox
         return True
 
     def score(self, frame, bbox):
@@ -18,6 +21,10 @@ class FakeMatcher:
 
     def best_match(self, frame, candidates):
         return candidates[0], 0.85
+
+    def reset(self):
+        self.reference = None
+        self.reset_calls += 1
 
 
 class PresenterVerifierTests(unittest.TestCase):
@@ -44,6 +51,18 @@ class PresenterVerifierTests(unittest.TestCase):
 
         self.assertEqual(suspected.event, "MISMATCH_SUSPECTED")
         self.assertEqual(confirmed.event, "PRESENTER_MISMATCH")
+
+    def test_unregister_clears_state_and_resets_matcher(self):
+        matcher = FakeMatcher()
+        verifier = PresenterVerifier(matcher)
+        verifier.register(None, (1, 2, 3, 4))
+        self.assertTrue(verifier.registered)
+
+        verifier.unregister()
+
+        self.assertFalse(verifier.registered)
+        self.assertIsNone(matcher.reference)
+        self.assertEqual(matcher.reset_calls, 1)
 
     def test_delegates_recovery_candidate_matching(self):
         verifier = PresenterVerifier(FakeMatcher())

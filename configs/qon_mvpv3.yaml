@@ -19,14 +19,19 @@ detector:
   nms_threshold: 0.45
 
 registration:
-  mode: marker
+  # Register the presenter with an ArUco marker, or fall back to a raised-hand
+  # gesture (MediaPipe) when no marker is available.
+  mode: marker-or-gesture
   reference: selected
   target_marker_id: 0
   register_on_start: true
   marker_positive: false
-  auto_reregister: true
+  # The LOST -> reset -> re-register loop replaces marker-only auto re-registration.
+  auto_reregister: false
   reregister_confirm_frames: 3
   timeout_frames: 90
+  # Stay LOST this many seconds, then clear the presenter and return to registration.
+  lost_reset_seconds: 3.0
 
 reid:
   backend: hsv

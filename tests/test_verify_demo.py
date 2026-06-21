@@ -20,6 +20,7 @@ from src.app.verify_demo import (
     marker_visible_in_observed_region,
     maybe_auto_reregister,
     parse_args,
+    perform_lost_reset,
     select_registration_bbox,
     should_collect_markers,
     should_collect_registration_inputs,
@@ -301,6 +302,28 @@ def make_lost_identity_provider():
     provider.last_people = [PersonDetection((10, 10, 40, 80))]
     provider.last_observation = IdentityObservation(None, "identity_lost", TrackingState.LOST, "TARGET_LOST")
     return provider
+
+
+class LostResetTests(unittest.TestCase):
+    def test_perform_lost_reset_returns_demo_to_registration(self):
+        provider = make_lost_identity_provider()
+        provider.last_trusted_bbox = (10, 10, 50, 90)
+        verifier = SimpleNamespace(registered=True, unregister_calls=0)
+        verifier.unregister = lambda: setattr(verifier, "registered", False) or setattr(
+            verifier, "unregister_calls", verifier.unregister_calls + 1
+        )
+        supervisor = SimpleNamespace(tracking_enabled=True)
+        supervisor.reset_for_registration = lambda: setattr(supervisor, "tracking_enabled", False)
+        ptz = SimpleNamespace(stopped=False)
+        ptz.stop = lambda: setattr(ptz, "stopped", True)
+
+        perform_lost_reset(provider, verifier, supervisor, ptz)
+
+        self.assertFalse(verifier.registered)
+        self.assertEqual(verifier.unregister_calls, 1)
+        self.assertFalse(supervisor.tracking_enabled)
+        self.assertTrue(ptz.stopped)
+        self.assertIsNone(provider.last_trusted_bbox)
 
 
 class FakeVerifier:

@@ -25,6 +25,14 @@ class PresenterVerifier:
         self.mismatch_count = 0
         return self.registered
 
+    def unregister(self) -> None:
+        """Clear the registered presenter so the demo returns to registration."""
+        self.registered = False
+        self.mismatch_count = 0
+        reset = getattr(self.matcher, "reset", None)
+        if callable(reset):
+            reset()
+
     def verify(self, frame, bbox: BBox | None, source: str = "") -> VerificationResult:
         if not self.registered:
             return VerificationResult(TrackingState.UNREGISTERED, bbox, event="REGISTER_REQUIRED", source=source)

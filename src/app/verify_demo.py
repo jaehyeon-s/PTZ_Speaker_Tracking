@@ -171,6 +171,12 @@ def parse_args() -> argparse.Namespace:
         default=config_value(config, "reregister_confirm_frames", "registration.reregister_confirm_frames", default=3),
         help="Consecutive LOST marker frames required before auto re-registration",
     )
+    parser.add_argument(
+        "--lost-reset-seconds",
+        type=float,
+        default=config_value(config, "lost_reset_seconds", "registration.lost_reset_seconds", default=0.0),
+        help="When tracking stays LOST this many seconds, clear the presenter and return to registration (0 disables)",
+    )
     parser.add_argument("--camera-url", default=config_value(config, "camera_url", "camera.url"), help="Qon camera origin, for example http://192.168.11.88")
     parser.add_argument("--camera-username", default=config_value(config, "camera_username", "camera.username"))
     parser.add_argument("--camera-password-env", default=config_value(config, "camera_password_env", "camera.password_env"))
@@ -399,6 +405,8 @@ def main() -> int:
     frame_index = 0
     fps_meter = FpsMeter()
     reregister_streak = 0
+    lost_since: float | None = None
+    ever_registered = False
     try:
         while True:
             read_start = time.perf_counter()
@@ -432,7 +440,7 @@ def main() -> int:
                     gesture_detector,
                 )
                 if selected_bbox is None or not verifier.register(frame, selected_bbox):
-                    if args.no_window and frame_index >= max(1, args.registration_timeout_frames):
+                    if args.no_window and not ever_registered and frame_index >= max(1, args.registration_timeout_frames):
                         print("Could not register presenter from the available frame.")
                         return 1
                 else:
@@ -442,6 +450,8 @@ def main() -> int:
                     )
                     supervisor.enable_tracking("registered")
                     registered_this_frame = True
+                    ever_registered = True
+                    lost_since = None
 
             reregister_streak, reregister_bbox = maybe_auto_reregister(
                 args,
@@ -461,6 +471,8 @@ def main() -> int:
                 )
                 supervisor.enable_tracking("auto_reregister")
                 registered_this_frame = True
+                ever_registered = True
+                lost_since = None
 
             should_report = should_verify or registered_this_frame
             if should_report and (not verifier.registered or registered_this_frame):
@@ -491,6 +503,20 @@ def main() -> int:
                 if last_result.event in ("PRESENTER_MISMATCH", "PRESENTER_MISTRACK_CONFIRMED"):
                     supervisor.confirm_mismatch()
                 print_status(frame_index, last_result, recovery_bbox, recovery_score, fps, read_ms, detect_ms)
+
+            if args.lost_reset_seconds > 0 and verifier.registered and is_identity_provider(provider):
+                if provider.last_observation.state == TrackingState.LOST:
+                    if lost_since is None:
+                        lost_since = time.monotonic()
+                    elif time.monotonic() - lost_since >= args.lost_reset_seconds:
+                        perform_lost_reset(provider, verifier, supervisor, ptz_controller)
+                        last_result = VerificationResult(
+                            TrackingState.UNREGISTERED, None, event="RESET_TO_REGISTRATION"
+                        )
+                        print_status(frame_index, last_result, None, 0.0, fps, read_ms, detect_ms)
+                        lost_since = None
+                else:
+                    lost_since = None
 
             ptz_action = ""
             if ptz_controller is not None and verifier.registered:
@@ -555,7 +581,9 @@ def main() -> int:
                         TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
                     supervisor.enable_tracking("manual_register")
-        if args.register_on_start and args.no_window and not verifier.registered:
+                    ever_registered = True
+                    lost_since = None
+        if args.register_on_start and args.no_window and not ever_registered and not verifier.registered:
             print("Could not register presenter before the video source ended.")
             return 1
     finally:
@@ -654,6 +682,14 @@ class CameraTrackingSupervisor:
         self.actuator_owned_by_supervisor = True
         self.last_action = "supervisor_actuator_configured"
 
+    def reset_for_registration(self) -> None:
+        """Return to a not-tracking state so a new presenter can be registered."""
+        self.tracking_enabled = False
+        self.mismatch_handled = False
+        if self.control is not None and not self.actuator_owned_by_supervisor:
+            self.control.stop()
+        self.last_action = "reset_for_registration"
+
     def confirm_mismatch(self) -> None:
         if self.control is None or self.mismatch_handled:
             return
@@ -709,6 +745,16 @@ def is_identity_provider(provider) -> bool:
 def reset_provider_registration_state(provider, bbox: BBox | None) -> None:
     if is_identity_provider(provider):
         provider.reset_identity_state(bbox)
+
+
+def perform_lost_reset(provider, verifier, supervisor, ptz_controller) -> None:
+    """Clear the registered presenter and return the demo to registration mode."""
+    verifier.unregister()
+    if is_identity_provider(provider):
+        provider.reset_identity_state(None)
+    if ptz_controller is not None:
+        ptz_controller.stop()
+    supervisor.reset_for_registration()
 
 
 def maybe_auto_reregister(args, frame, provider, verifier, markers, streak: int) -> tuple[int, BBox | None]:

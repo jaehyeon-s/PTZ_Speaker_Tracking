@@ -2,8 +2,9 @@
 numpy>=1.26.0,<2
 opencv-contrib-python>=4.9.0,<4.12
 
-# Optional MediaPipe gesture fallback:
-# mediapipe>=0.10.0
+# Raised-hand gesture registration fallback (legacy mp.solutions.pose API).
+# Pinned: 0.10.14 still ships mp.solutions; newer wheels (0.10.3x) are Tasks-only.
+mediapipe==0.10.14
 
 # Optional YOLO/recovery detection only:
 # ultralytics>=8.3.0
