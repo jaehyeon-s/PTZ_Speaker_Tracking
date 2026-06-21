@@ -24,6 +24,7 @@ class PersonDetection:
     bbox: BBox
     confidence: float = 1.0
     class_name: str = "person"
+    track_id: Optional[int] = None
 
     @property
     def center(self) -> Point:

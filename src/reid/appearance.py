@@ -159,6 +159,53 @@ class OnnxEmbeddingReIdentifier:
         return frame[y1:y2, x1:x2]
 
 
+class TrackIdReIdentifier:
+    """Identity by multi-object-tracker id instead of appearance.
+
+    Keeps the same surface as the appearance re-identifier (``reference`` /
+    ``register`` / ``score`` / ``reset`` / ``best_match``) so the verifier and the
+    region provider need no changes. Scores are binary: 1.0 for the registered
+    track id, 0.0 for everyone else, so a different person can never be matched as
+    the presenter while the tracker holds the id.
+
+    It does not run inference itself; it reads the detector's most recent tracked
+    detections to resolve a bbox to its track id.
+    """
+
+    def __init__(self, detector, threshold: float = 0.5) -> None:
+        self.detector = detector
+        self.threshold = threshold
+        self.reference: int | None = None
+
+    def register(self, frame, bbox: BBox) -> bool:
+        del frame
+        track_id = self.detector.track_id_for_bbox(bbox)
+        if track_id is None:
+            return False
+        self.reference = track_id
+        return True
+
+    def score(self, frame, bbox: BBox) -> float:
+        del frame
+        if self.reference is None:
+            return 0.0
+        track_id = self.detector.track_id_for_bbox(bbox)
+        if track_id is None:
+            return 0.0
+        return 1.0 if track_id == self.reference else 0.0
+
+    def best_match(self, frame, candidates: list[Candidate]) -> tuple[Candidate | None, float]:
+        if self.reference is None:
+            return None, 0.0
+        for candidate in candidates:
+            if self.score(frame, candidate.bbox) >= self.threshold:
+                return candidate, 1.0
+        return None, 0.0
+
+    def reset(self) -> None:
+        self.reference = None
+
+
 def build_re_identifier(backend: str, threshold: float, model_path: str | None = None):
     if backend == "hsv":
         return AppearanceReIdentifier(threshold)

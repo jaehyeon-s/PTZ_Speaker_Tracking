@@ -276,6 +276,85 @@ class UltralyticsYoloDetector(PersonDetector):
         return detections
 
 
+class UltralyticsYoloTracker(PersonDetector):
+    """Ultralytics YOLO detector with a built-in multi-object tracker.
+
+    Unlike UltralyticsYoloDetector this calls ``model.track(persist=True)`` so
+    every person keeps a stable integer ``track_id`` across frames (ByteTrack by
+    default). The presenter is then followed by that id instead of appearance,
+    which a passer-by cannot steal as long as the tracker holds the id.
+
+    The most recent detections are cached so a matcher can resolve a bbox to its
+    track id without running inference twice on the same frame.
+    """
+
+    def __init__(
+        self,
+        model_path: str = "models/yolo26n_ncnn_model",
+        imgsz: int = 640,
+        confidence_threshold: float = 0.35,
+        tracker: str = "bytetrack.yaml",
+    ) -> None:
+        try:
+            from ultralytics import YOLO
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "Ultralytics is required for the trackid region mode: pip install ultralytics"
+            ) from exc
+
+        self.imgsz = imgsz
+        self.confidence_threshold = confidence_threshold
+        self.tracker = tracker
+        self.model = YOLO(model_path)
+        self.last_detections: List[PersonDetection] = []
+
+    def detect(self, frame: np.ndarray) -> List[PersonDetection]:
+        results = self.model.track(
+            frame,
+            imgsz=self.imgsz,
+            conf=self.confidence_threshold,
+            tracker=self.tracker,
+            persist=True,
+            verbose=False,
+        )
+        boxes = results[0].boxes
+        detections: List[PersonDetection] = []
+        if boxes is not None:
+            ids = boxes.id
+            for index, (xyxy, confidence, class_id) in enumerate(
+                zip(boxes.xyxy, boxes.conf, boxes.cls)
+            ):
+                if int(class_id) != 0:
+                    continue
+                x1, y1, x2, y2 = (float(value) for value in xyxy)
+                bbox = (int(round(x1)), int(round(y1)), int(round(x2 - x1)), int(round(y2 - y1)))
+                track_id = int(ids[index]) if ids is not None else None
+                detections.append(
+                    PersonDetection(bbox=bbox, confidence=float(confidence), track_id=track_id)
+                )
+        self.last_detections = detections
+        return detections
+
+    def track_id_for_bbox(
+        self,
+        bbox_xyxy: tuple[int, int, int, int],
+        min_iou: float = 0.3,
+    ) -> Optional[int]:
+        """Return the track id of the cached detection that best overlaps bbox."""
+        x1, y1, x2, y2 = bbox_xyxy
+        query = (int(x1), int(y1), int(max(0, x2 - x1)), int(max(0, y2 - y1)))
+        best_id: Optional[int] = None
+        best_iou = min_iou
+        for detection in self.last_detections:
+            if detection.track_id is None:
+                continue
+            iou = _bbox_iou(query, detection.bbox)
+            if iou >= best_iou:
+                best_iou = iou
+                best_id = detection.track_id
+        return best_id
+
+
 class ManualPersonDetector(PersonDetector):
     """Deterministic detector for smoke tests and controlled demo videos."""
 

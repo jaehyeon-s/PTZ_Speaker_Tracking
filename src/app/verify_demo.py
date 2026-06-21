@@ -12,11 +12,11 @@ from typing import Any
 from src.camera.qon_control import QonTrackingControl, QonVelocityPTZController
 from src.camera.region_provider import CenterCropRegionProvider, IdentityMatchedRegionProvider, JsonlRegionProvider
 from src.recovery.candidate_detector import YoloRecoveryDetector
-from src.reid.appearance import build_re_identifier
+from src.reid.appearance import TrackIdReIdentifier, build_re_identifier
 from src.reid.verifier import PresenterVerifier, VerifierConfig
 from src.tracking.gesture_detector import GestureFallbackDetector
 from src.tracking.marker_detector import ArucoMarkerDetector
-from src.tracking.person_detector import build_person_detector
+from src.tracking.person_detector import UltralyticsYoloTracker, build_person_detector
 from src.tracking.target_selector import point_in_bbox
 from src.tracking.target_state import PersonDetection
 from src.vision.capture import VideoSource
@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--region-mode",
-        choices=("center", "jsonl", "identity"),
+        choices=("center", "jsonl", "identity", "trackid"),
         default=config_value(config, "region_mode", "region.mode", default="center"),
     )
     parser.add_argument(
@@ -348,8 +348,8 @@ def main() -> int:
     if args.region_mode == "jsonl" and not args.bbox_jsonl:
         print("--region-mode jsonl requires --bbox-jsonl.")
         return 2
-    if args.ptz_follow_target and args.region_mode != "identity":
-        print("--ptz-follow-target requires --region-mode identity.")
+    if args.ptz_follow_target and args.region_mode not in ("identity", "trackid"):
+        print("--ptz-follow-target requires --region-mode identity or trackid.")
         return 2
 
     import cv2
@@ -364,15 +364,16 @@ def main() -> int:
         print("Could not open validation video source.")
         return 1
 
-    matcher = build_re_identifier(args.reid_backend, args.reid_threshold, args.reid_model)
-    provider = build_region_provider(args, matcher)
+    matcher, provider = build_tracking_stack(args)
     camera_control = build_camera_control(args)
     supervisor = CameraTrackingSupervisor(camera_control, args.recovery_action)
     if args.configure_supervisor_actuator:
         supervisor.configure_actuator()
     if args.enable_camera_tracking_on_start:
         supervisor.enable_tracking("startup")
-    registration_detector = build_registration_detector(args)
+    # In trackid mode the provider already runs the YOLO tracker every frame, so
+    # reuse its detections for registration instead of running a second detector.
+    registration_detector = None if args.region_mode == "trackid" else build_registration_detector(args)
     marker_detector = (
         ArucoMarkerDetector()
         if args.registration_mode in ("marker", "marker-or-gesture") or args.marker_positive or args.auto_reregister
@@ -454,8 +455,12 @@ def main() -> int:
 
             people = []
             markers = []
-            if registration_detector is not None and should_collect_registration_inputs(args, verifier.registered):
-                people = registration_detector.detect(frame)
+            if should_collect_registration_inputs(args, verifier.registered):
+                if registration_detector is not None:
+                    people = registration_detector.detect(frame)
+                else:
+                    # trackid mode: provider already detected this frame.
+                    people = list(getattr(provider, "last_people", []))
             if marker_detector is not None and should_collect_markers(args, verifier.registered, should_verify, provider):
                 markers = marker_detector.detect(frame)
 
@@ -631,6 +636,49 @@ def main() -> int:
         if not args.no_window:
             cv2.destroyAllWindows()
     return 0
+
+
+def build_tracking_stack(args):
+    """Build the (matcher, region provider) pair for the selected region mode.
+
+    The track-id mode builds a shared YOLO tracker that both the matcher and the
+    provider read from, so the presenter is followed by a stable tracker id rather
+    than by appearance colour.
+    """
+    if args.region_mode == "trackid":
+        tracker = UltralyticsYoloTracker(
+            resolve_ultralytics_model(args),
+            imgsz=args.ncnn_input_size,
+            confidence_threshold=args.conf_threshold,
+        )
+        matcher = TrackIdReIdentifier(tracker)
+        provider = IdentityMatchedRegionProvider(
+            tracker,
+            matcher,
+            CenterCropRegionProvider(args.center_width_ratio, args.center_height_ratio),
+            weak_min_score=args.identity_weak_min_score,
+            identity_margin=args.identity_margin,
+            center_margin=args.center_margin,
+            center_dead_zone_ratio=args.identity_center_dead_zone,
+            mismatch_limit=args.mismatch_limit,
+            hold_limit=args.identity_hold_limit,
+            switch_margin=args.identity_switch_margin,
+            position_gate_ratio=args.identity_position_gate,
+            detect_during_bootstrap=True,
+            enable_center_mistrack=False,
+        )
+        return matcher, provider
+
+    matcher = build_re_identifier(args.reid_backend, args.reid_threshold, args.reid_model)
+    return matcher, build_region_provider(args, matcher)
+
+
+def resolve_ultralytics_model(args) -> str:
+    if args.ultralytics_model:
+        return args.ultralytics_model
+    if args.ncnn_param:
+        return str(Path(args.ncnn_param).parent)
+    raise ValueError("--region-mode trackid requires --ultralytics-model or --ncnn-param")
 
 
 def build_region_provider(args, matcher):
@@ -985,19 +1033,10 @@ def print_status(frame_index, result, recovery_bbox, recovery_score, fps: float,
 
 
 def draw_debug(cv2, frame, result, observed_bbox, observed_source, recovery_bbox, ptz_action: str, fps: float) -> None:
+    # Boxes only; on-frame status text is intentionally omitted for a clean view.
     if observed_bbox is not None:
         x1, y1, x2, y2 = observed_bbox
         cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 180, 40), 2)
-        cv2.putText(
-            frame,
-            f"observed {observed_source}",
-            (x1, max(45, y1 - 8)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (255, 180, 40),
-            1,
-            cv2.LINE_AA,
-        )
     if result.bbox is not None:
         color = (0, 200, 0) if result.state is TrackingState.VERIFIED else (0, 0, 255)
         x1, y1, x2, y2 = result.bbox
@@ -1005,9 +1044,6 @@ def draw_debug(cv2, frame, result, observed_bbox, observed_source, recovery_bbox
     if recovery_bbox is not None:
         x1, y1, x2, y2 = recovery_bbox
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
-    text = f"{result.state.value} {result.event} score={result.score:.2f} src={result.source} ptz={ptz_action or '-'} fps={fps:.1f}"
-    cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 0, 0), 3)
-    cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 1)
 
 
 def write_video(cv2, writer, output: str | None, frame, source_fps: float):

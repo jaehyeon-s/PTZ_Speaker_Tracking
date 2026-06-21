@@ -101,10 +101,20 @@ class IdentityMatchedRegionProvider:
         hold_limit: int = 30,
         switch_margin: float = 0.15,
         position_gate_ratio: float = 0.5,
+        detect_during_bootstrap: bool = False,
+        enable_center_mistrack: bool = True,
     ) -> None:
         self.detector = detector
         self.matcher = matcher
         self.fallback_provider = fallback_provider or CenterCropRegionProvider()
+        # When True, keep running the detector before a presenter is registered so a
+        # multi-object tracker keeps stable ids warm and last_people is available for
+        # registration (used by the track-id region mode).
+        self.detect_during_bootstrap = detect_during_bootstrap
+        # Center-vs-identity mistrack detection only makes sense for appearance
+        # matching. With an authoritative tracker id, being off-center is normal, so
+        # disable it to avoid false PRESENTER_MISTRACK_CONFIRMED recoveries.
+        self.enable_center_mistrack = enable_center_mistrack
         self.weak_min_score = weak_min_score
         self.identity_margin = identity_margin
         self.center_margin = center_margin
@@ -126,7 +136,7 @@ class IdentityMatchedRegionProvider:
 
     def region_for_frame(self, frame_index: int, frame) -> tuple[BBox | None, str]:
         if not self._has_reference():
-            self.last_people = []
+            self.last_people = self.detector.detect(frame) if self.detect_during_bootstrap else []
             bbox, source = self.fallback_provider.region_for_frame(frame_index, frame)
             self.last_observation = IdentityObservation(
                 bbox,
@@ -164,7 +174,7 @@ class IdentityMatchedRegionProvider:
 
         self.hold_count = 0
         self.last_trusted_bbox = best.bbox
-        if center_candidate is not None and best.bbox != center_candidate.bbox:
+        if self.enable_center_mistrack and center_candidate is not None and best.bbox != center_candidate.bbox:
             away = _is_away_from_center(best.bbox, frame.shape, self.center_dead_zone_ratio)
             if away and center_delta >= self.center_margin:
                 self.mismatch_count += 1

@@ -1,5 +1,7 @@
 source: rtsp://192.168.11.88:554/stream2
-region_mode: identity
+# trackid: follow the presenter by a YOLO tracker id (ByteTrack) instead of HSV
+# colour, so a passer-by cannot steal the track while the id is held.
+region_mode: trackid
 
 video:
   # RTSP uses a latest-frame capture thread; keep this 0 unless extra frame skipping is needed.
