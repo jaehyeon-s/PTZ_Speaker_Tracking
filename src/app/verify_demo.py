@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--detector",
-        choices=("hog", "opencv-yolo", "ncnn", "manual"),
+        choices=("hog", "opencv-yolo", "ncnn", "ultralytics", "manual"),
         default=config_value(config, "detector.backend", "detector", default="ncnn"),
         help="Person detector used for registration and identity observations",
     )
@@ -83,6 +83,11 @@ def parse_args() -> argparse.Namespace:
         "--ncnn-output-names",
         default=config_value(config, "ncnn_output_names", "detector.ncnn_output_names", default="out0"),
         help="Comma-separated NCNN output blob names to try",
+    )
+    parser.add_argument(
+        "--ultralytics-model",
+        default=config_value(config, "ultralytics_model", "detector.ultralytics_model"),
+        help="Ultralytics YOLO model path/dir; defaults to the --ncnn-param directory",
     )
     parser.add_argument("--person-box", default=config_value(config, "person_box", "detector.person_box"), help="Manual detector bbox x,y,w,h")
     parser.add_argument("--conf-threshold", type=float, default=config_value(config, "conf_threshold", "detector.conf_threshold", default=0.35))
@@ -582,6 +587,7 @@ def build_region_provider(args, matcher):
             conf_threshold=args.conf_threshold,
             nms_threshold=args.nms_threshold,
             debug_detector=args.debug_detector,
+            ultralytics_model=args.ultralytics_model,
         )
         return IdentityMatchedRegionProvider(
             detector,
@@ -753,6 +759,7 @@ def build_registration_detector(args):
         conf_threshold=args.conf_threshold,
         nms_threshold=args.nms_threshold,
         debug_detector=args.debug_detector,
+        ultralytics_model=args.ultralytics_model,
     )
 
 

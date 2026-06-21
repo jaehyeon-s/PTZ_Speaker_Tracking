@@ -232,6 +232,61 @@ class NCNNPersonDetector(PersonDetector):
             print(f"[NCNN WARNING] {message}")
 
 
+class UltralyticsYoloDetector(PersonDetector):
+    """Ultralytics YOLO adapter that runs the NCNN-exported yolo26n model.
+
+    This is an alternative to NCNNPersonDetector that reuses the Ultralytics
+    runtime (YOLO) for decode/NMS instead of the hand-written NCNN parser. It
+    emits the same PersonDetection(bbox=(x, y, w, h), confidence=...) shape, so
+    region_provider.py and other downstream consumers need no changes.
+    """
+
+    def __init__(
+        self,
+        model_path: str = "models/yolo26n_ncnn_model",
+        imgsz: int = 640,
+        confidence_threshold: float = 0.35,
+    ) -> None:
+        try:
+            from ultralytics import YOLO
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "Ultralytics is required for --detector ultralytics: pip install ultralytics"
+            ) from exc
+
+        self.imgsz = imgsz
+        self.confidence_threshold = confidence_threshold
+        self.model = YOLO(model_path)
+
+    def detect(self, frame: np.ndarray) -> List[PersonDetection]:
+        results = self.model(
+            frame,
+            imgsz=self.imgsz,
+            conf=self.confidence_threshold,
+            verbose=False,
+        )
+        boxes = results[0].boxes
+        if boxes is None:
+            return []
+
+        xyxy = np.asarray(boxes.xyxy).reshape(-1, 4)
+        confidences = np.asarray(boxes.conf).reshape(-1)
+        class_ids = np.asarray(boxes.cls).reshape(-1)
+
+        detections: List[PersonDetection] = []
+        for (x1, y1, x2, y2), confidence, class_id in zip(xyxy, confidences, class_ids):
+            if int(class_id) != 0:
+                continue
+            x = int(round(float(x1)))
+            y = int(round(float(y1)))
+            box_w = int(round(float(x2) - float(x1)))
+            box_h = int(round(float(y2) - float(y1)))
+            detections.append(
+                PersonDetection(bbox=(x, y, box_w, box_h), confidence=float(confidence))
+            )
+        return detections
+
+
 class ManualPersonDetector(PersonDetector):
     """Deterministic detector for smoke tests and controlled demo videos."""
 
@@ -324,6 +379,7 @@ def build_person_detector(
     debug_detector: bool = False,
     existing_detector: Any = None,
     result_getter: Optional[Callable[[Any, np.ndarray], Any]] = None,
+    ultralytics_model: Optional[str] = None,
 ) -> PersonDetector:
     if existing_detector is not None:
         return ExistingProjectPersonDetectorAdapter(
@@ -351,6 +407,19 @@ def build_person_detector(
             confidence_threshold=conf_threshold,
             nms_threshold=nms_threshold,
             debug_detector=debug_detector,
+        )
+    if detector_mode == "ultralytics":
+        model_path = ultralytics_model
+        if model_path is None:
+            if ncnn_param is None:
+                raise ValueError(
+                    "--detector ultralytics requires --ultralytics-model or --ncnn-param"
+                )
+            model_path = str(Path(ncnn_param).parent)
+        return UltralyticsYoloDetector(
+            model_path,
+            imgsz=ncnn_input_size,
+            confidence_threshold=conf_threshold,
         )
     if detector_mode == "hog":
         return HOGPersonDetector()
