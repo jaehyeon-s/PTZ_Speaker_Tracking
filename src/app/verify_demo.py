@@ -264,6 +264,18 @@ def parse_args() -> argparse.Namespace:
         help="Seconds to wait for the home move to finish before the reset zoom-in",
     )
     parser.add_argument(
+        "--ptz-aim-hysteresis",
+        type=float,
+        default=config_value(config, "ptz_aim_hysteresis", "ptz.aim_hysteresis", default=0.06),
+        help="Extra band beyond dead_zone the target must cross before panning/tilting again (anti-hunting)",
+    )
+    parser.add_argument(
+        "--ptz-aim-smoothing",
+        type=float,
+        default=config_value(config, "ptz_aim_smoothing", "ptz.aim_smoothing", default=0.3),
+        help="EMA factor (0-1) smoothing the target centre before pan/tilt decisions",
+    )
+    parser.add_argument(
         "--recovery-action",
         choices=("none", "stop", "home", "zoomout"),
         default=config_value(config, "recovery_action", "recovery.action", default="home"),
@@ -818,6 +830,8 @@ def build_ptz_controller(args, camera_control):
         zoom_smoothing=args.ptz_zoom_smoothing,
         reset_zoom_in_seconds=args.ptz_reset_zoom_in_seconds,
         reset_home_settle_seconds=args.ptz_reset_home_settle_seconds,
+        aim_hysteresis=args.ptz_aim_hysteresis,
+        aim_smoothing=args.ptz_aim_smoothing,
     )
 
 

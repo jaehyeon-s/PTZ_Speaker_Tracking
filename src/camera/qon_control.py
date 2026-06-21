@@ -276,6 +276,8 @@ class QonVelocityPTZController:
         zoom_smoothing: float = 0.3,
         reset_zoom_in_seconds: float = 1.2,
         reset_home_settle_seconds: float = 0.8,
+        aim_hysteresis: float = 0.06,
+        aim_smoothing: float = 0.3,
     ) -> None:
         self.control = control
         self.dead_zone_ratio = dead_zone_ratio
@@ -297,6 +299,14 @@ class QonVelocityPTZController:
         # framing where a raised hand is large enough to be recognised.
         self.reset_zoom_in_seconds = max(0.0, reset_zoom_in_seconds)
         self.reset_home_settle_seconds = max(0.0, reset_home_settle_seconds)
+        # Anti-hunting for pan/tilt: smooth the target centre and, once centred,
+        # hold until it drifts past dead_zone + aim_hysteresis. Stops the "head
+        # shaking" left/right oscillation around the frame centre.
+        self.aim_hysteresis = max(0.0, aim_hysteresis)
+        self.aim_smoothing = min(1.0, max(0.05, aim_smoothing))
+        self._aim_ex_ema: float | None = None
+        self._aim_ey_ema: float | None = None
+        self._aim_settled = False
         # Fraction down the bbox to aim the camera at (0.5 = center, lower values
         # aim higher toward the head so the face is framed instead of the torso).
         self.vertical_aim_ratio = vertical_aim_ratio
@@ -380,6 +390,9 @@ class QonVelocityPTZController:
         self.stop()
         self._zoom_ratio_ema = None
         self._zoom_settled = False
+        self._aim_ex_ema = None
+        self._aim_ey_ema = None
+        self._aim_settled = False
         try:
             self.control.home()
             if self.zoom_enabled and self.reset_zoom_in_seconds > 0:
@@ -408,9 +421,25 @@ class QonVelocityPTZController:
         x1, y1, x2, y2 = bbox
         cx = (x1 + x2) / 2.0
         cy = y1 + self.vertical_aim_ratio * (y2 - y1)
-        error_x = (cx - frame_w / 2.0) / max(frame_w / 2.0, 1.0)
-        error_y = (cy - frame_h / 2.0) / max(frame_h / 2.0, 1.0)
-        if abs(error_x) <= self.dead_zone_ratio and abs(error_y) <= self.dead_zone_ratio:
+        raw_ex = (cx - frame_w / 2.0) / max(frame_w / 2.0, 1.0)
+        raw_ey = (cy - frame_h / 2.0) / max(frame_h / 2.0, 1.0)
+        # Smooth the target centre to reject per-frame detection jitter.
+        if self._aim_ex_ema is None:
+            self._aim_ex_ema, self._aim_ey_ema = raw_ex, raw_ey
+        else:
+            self._aim_ex_ema += self.aim_smoothing * (raw_ex - self._aim_ex_ema)
+            self._aim_ey_ema += self.aim_smoothing * (raw_ey - self._aim_ey_ema)
+        error_x, error_y = self._aim_ex_ema, self._aim_ey_ema
+        inner = self.dead_zone_ratio
+        outer = self.dead_zone_ratio + self.aim_hysteresis
+        # Once centred, hold still until the target drifts past the wider outer
+        # band; this is what stops the left/right "head shaking".
+        if self._aim_settled:
+            if abs(error_x) <= outer and abs(error_y) <= outer:
+                return "ptzstop", 0
+            self._aim_settled = False
+        if abs(error_x) <= inner and abs(error_y) <= inner:
+            self._aim_settled = True
             return "ptzstop", 0
         if abs(error_x) >= abs(error_y):
             direction = "right" if error_x > 0 else "left"

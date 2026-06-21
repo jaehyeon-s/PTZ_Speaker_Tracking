@@ -160,6 +160,27 @@ class QonTrackingControlTests(unittest.TestCase):
         action = ptz.follow_bbox((90, 12, 110, 88), frame)
         self.assertTrue(action.startswith("zoomout:"))
 
+    def test_velocity_ptz_does_not_shake_within_aim_hysteresis(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+        ptz = QonVelocityPTZController(
+            control,
+            dead_zone_ratio=0.1,
+            aim_hysteresis=0.1,
+            aim_smoothing=1.0,  # isolate the hysteresis from EMA lag
+            vertical_aim_ratio=0.5,
+        )
+        frame = (100, 200, 3)
+
+        # Centred -> settles, no motion.
+        self.assertEqual(ptz.follow_bbox((90, 30, 110, 70), frame), "ptzstop")
+        # Small horizontal wobble inside the outer band must NOT pan.
+        self.assertEqual(ptz.follow_bbox((96, 30, 116, 70), frame), "ptzstop")
+        self.assertEqual(ptz.follow_bbox((84, 30, 104, 70), frame), "ptzstop")
+        # A real drift past the outer band resumes panning.
+        action = ptz.follow_bbox((130, 30, 150, 70), frame)
+        self.assertTrue(action.startswith("right:"))
+
     def test_reset_view_homes_then_zooms_in_to_medium(self):
         opener = FakeOpener()
         control = QonTrackingControl("http://camera", opener=opener)

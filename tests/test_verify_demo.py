@@ -219,6 +219,8 @@ class VerifyDemoSmokeTests(unittest.TestCase):
             ptz_zoom_smoothing=0.3,
             ptz_reset_zoom_in_seconds=1.2,
             ptz_reset_home_settle_seconds=0.8,
+            ptz_aim_hysteresis=0.06,
+            ptz_aim_smoothing=0.3,
         )
 
         controller = build_ptz_controller(args, object())

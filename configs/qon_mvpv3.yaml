@@ -82,6 +82,11 @@ ptz:
   # tighter view, decrease (or 0) for wider.
   reset_zoom_in_seconds: 1.2
   reset_home_settle_seconds: 0.8
+  # Anti-hunting for pan/tilt ("head shaking"): smooth the target centre and, once
+  # centred, hold until it drifts past dead_zone + aim_hysteresis. Raise these if
+  # the camera still wobbles left/right; lower for snappier tracking.
+  aim_hysteresis: 0.06
+  aim_smoothing: 0.3
 
 logging:
   csv: logs/identity_supervisor.csv
