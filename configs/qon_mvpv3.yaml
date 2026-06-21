@@ -8,10 +8,10 @@ video:
   rtsp_first_read_timeout: 10.0
 
 detector:
-  backend: ncnn
+  backend: ultralytics
   ncnn_param: models/yolo26n_ncnn_model/model.ncnn.param
   ncnn_bin: models/yolo26n_ncnn_model/model.ncnn.bin
-  # YOLO model input size. This is not the RTSP frame size; stream2 is 640x360.
+  # YOLO model input size (used as ultralytics imgsz). Not the RTSP frame size; stream2 is 640x360.
   ncnn_input_size: 416
   ncnn_input_name: in0
   ncnn_output_names: out0

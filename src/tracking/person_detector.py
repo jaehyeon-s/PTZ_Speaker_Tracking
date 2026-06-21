@@ -266,24 +266,13 @@ class UltralyticsYoloDetector(PersonDetector):
             verbose=False,
         )
         boxes = results[0].boxes
-        if boxes is None:
-            return []
-
-        xyxy = np.asarray(boxes.xyxy).reshape(-1, 4)
-        confidences = np.asarray(boxes.conf).reshape(-1)
-        class_ids = np.asarray(boxes.cls).reshape(-1)
-
         detections: List[PersonDetection] = []
-        for (x1, y1, x2, y2), confidence, class_id in zip(xyxy, confidences, class_ids):
+        for xyxy, confidence, class_id in zip(boxes.xyxy, boxes.conf, boxes.cls):
             if int(class_id) != 0:
                 continue
-            x = int(round(float(x1)))
-            y = int(round(float(y1)))
-            box_w = int(round(float(x2) - float(x1)))
-            box_h = int(round(float(y2) - float(y1)))
-            detections.append(
-                PersonDetection(bbox=(x, y, box_w, box_h), confidence=float(confidence))
-            )
+            x1, y1, x2, y2 = (float(value) for value in xyxy)
+            bbox = (int(round(x1)), int(round(y1)), int(round(x2 - x1)), int(round(y2 - y1)))
+            detections.append(PersonDetection(bbox=bbox, confidence=float(confidence)))
         return detections
 
 
