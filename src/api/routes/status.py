@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 from src.api.state import app_state
+from src.api.services.mvpv3_adapter import load_mvpv3_dashboard_state
+from src.api.services.command_bus import command_bridge_status, write_command
 import time
 import math
 
@@ -371,14 +373,32 @@ def build_mock_detections():
     return detections
 
 
+def apply_mvpv3_state_if_available():
+    dashboard_state = load_mvpv3_dashboard_state()
+    if dashboard_state is None:
+        return None
+
+    detections = dashboard_state.pop("detections", [])
+    app_state.update(dashboard_state)
+    app_state["integration_source"] = "MVPv3"
+    return detections
+
+
 @router.get("/api/status")
 def get_status():
-    build_mock_detections()
+    detections = apply_mvpv3_state_if_available()
+    if detections is None:
+        build_mock_detections()
+        app_state["integration_source"] = "MOCK"
+    app_state["command_bridge"] = command_bridge_status()
     return app_state
 
 
 @router.get("/api/detections")
 def get_detections():
+    detections = apply_mvpv3_state_if_available()
+    if detections is not None:
+        return detections
     return build_mock_detections()
 
 
@@ -386,4 +406,5 @@ def get_detections():
 def toggle_zone_lock():
     ensure_base_state()
     app_state["zone_lock"] = "OFF" if app_state["zone_lock"] == "ON" else "ON"
-    return {"status": app_state["zone_lock"]}
+    command = write_command("ZONE_LOCK_TOGGLE", {"zone_lock": app_state["zone_lock"]})
+    return {"status": app_state["zone_lock"], "command": command}

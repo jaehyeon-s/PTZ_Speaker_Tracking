@@ -423,15 +423,15 @@ document.querySelectorAll(".position-btn").forEach((button) => {
 document.getElementById("startBtn").onclick = () => callAPI("/api/session/start", "Session Start");
 document.getElementById("endBtn").onclick = () => callAPI("/api/session/end", "Session End");
 
-document.getElementById("lockBtn").onclick = () => addLog("Target Lock 요청");
-document.getElementById("unlockBtn").onclick = () => addLog("Target Unlock 요청");
-document.getElementById("upBtn").onclick = () => addLog("PTZ Move Up");
-document.getElementById("downBtn").onclick = () => addLog("PTZ Move Down");
-document.getElementById("leftBtn").onclick = () => addLog("PTZ Move Left");
-document.getElementById("rightBtn").onclick = () => addLog("PTZ Move Right");
-document.getElementById("centerBtn").onclick = () => addLog("PTZ Home / Center");
-document.getElementById("zoomInBtn").onclick = () => addLog("Zoom In");
-document.getElementById("zoomOutBtn").onclick = () => addLog("Zoom Out");
+document.getElementById("lockBtn").onclick = () => callAPI("/api/ptz/lock", "Target Lock");
+document.getElementById("unlockBtn").onclick = () => callAPI("/api/ptz/unlock", "Target Unlock");
+document.getElementById("upBtn").onclick = () => callAPI("/api/ptz/move/up", "PTZ Move Up");
+document.getElementById("downBtn").onclick = () => callAPI("/api/ptz/move/down", "PTZ Move Down");
+document.getElementById("leftBtn").onclick = () => callAPI("/api/ptz/move/left", "PTZ Move Left");
+document.getElementById("rightBtn").onclick = () => callAPI("/api/ptz/move/right", "PTZ Move Right");
+document.getElementById("centerBtn").onclick = () => callAPI("/api/ptz/home", "PTZ Home / Center");
+document.getElementById("zoomInBtn").onclick = () => callAPI("/api/ptz/zoom/in", "Zoom In");
+document.getElementById("zoomOutBtn").onclick = () => callAPI("/api/ptz/zoom/out", "Zoom Out");
 
 document.getElementById("zoneBtn").onclick = () => callAPI("/api/zone/toggle", "Zone Lock Toggle");
 
