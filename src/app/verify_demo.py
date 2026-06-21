@@ -235,6 +235,12 @@ def parse_args() -> argparse.Namespace:
         help="Desired tracked-subject bbox height as a fraction of frame height (used with --ptz-zoom)",
     )
     parser.add_argument(
+        "--ptz-vertical-aim-ratio",
+        type=float,
+        default=config_value(config, "ptz_vertical_aim_ratio", "ptz.vertical_aim_ratio", default=0.5),
+        help="Fraction down the bbox to aim at; lower (e.g. 0.3) frames the face instead of the torso",
+    )
+    parser.add_argument(
         "--recovery-action",
         choices=("none", "stop", "home", "zoomout"),
         default=config_value(config, "recovery_action", "recovery.action", default="home"),
@@ -532,12 +538,16 @@ def main() -> int:
                 if provider.last_observation.state == TrackingState.LOST:
                     if lost_since is None:
                         lost_since = time.monotonic()
+                        if args.debug_detector:
+                            print(f"[RESET] LOST detected; will reset in {args.lost_reset_seconds:.1f}s if still lost")
                     elif time.monotonic() - lost_since >= args.lost_reset_seconds:
                         perform_lost_reset(provider, verifier, supervisor, ptz_controller)
                         last_result = VerificationResult(
                             TrackingState.UNREGISTERED, None, event="RESET_TO_REGISTRATION"
                         )
                         print_status(frame_index, last_result, None, 0.0, fps, read_ms, detect_ms)
+                        if args.debug_detector:
+                            print("[RESET] presenter cleared, camera widened, waiting for marker/gesture registration")
                         lost_since = None
                 else:
                     lost_since = None
@@ -748,6 +758,7 @@ def build_ptz_controller(args, camera_control):
         async_commands=True,
         zoom_enabled=args.ptz_zoom,
         target_height_ratio=args.ptz_target_height_ratio,
+        vertical_aim_ratio=args.ptz_vertical_aim_ratio,
     )
 
 
@@ -781,7 +792,7 @@ def perform_lost_reset(provider, verifier, supervisor, ptz_controller) -> None:
     if is_identity_provider(provider):
         provider.reset_identity_state(None)
     if ptz_controller is not None:
-        ptz_controller.stop()
+        ptz_controller.reset_view()
     supervisor.reset_for_registration()
 
 

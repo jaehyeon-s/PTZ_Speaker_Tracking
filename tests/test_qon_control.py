@@ -136,6 +136,18 @@ class QonTrackingControlTests(unittest.TestCase):
         self.assertTrue(action.startswith("zoomin:"))
         self.assertIn("ptzcmd&zoomin&3", zoom_url)
 
+    def test_velocity_ptz_aims_up_for_face_when_vertical_aim_is_high(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+        # Subject centered horizontally, vertically centered box; aim 0.3 -> camera tilts up.
+        ptz = QonVelocityPTZController(
+            control, dead_zone_ratio=0.05, vertical_aim_ratio=0.3
+        )
+
+        action = ptz.follow_bbox((95, 10, 105, 90), (100, 200, 3))
+
+        self.assertTrue(action.startswith("up:"))
+
     def test_velocity_ptz_skips_zoom_when_disabled(self):
         opener = FakeOpener()
         control = QonTrackingControl("http://camera", opener=opener)

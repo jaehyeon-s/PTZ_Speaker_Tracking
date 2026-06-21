@@ -271,6 +271,7 @@ class QonVelocityPTZController:
         target_height_ratio: float = 0.6,
         zoom_tolerance: float = 0.08,
         zoom_speed: int = 3,
+        vertical_aim_ratio: float = 0.5,
     ) -> None:
         self.control = control
         self.dead_zone_ratio = dead_zone_ratio
@@ -281,6 +282,9 @@ class QonVelocityPTZController:
         self.target_height_ratio = target_height_ratio
         self.zoom_tolerance = zoom_tolerance
         self.zoom_speed = max(1, zoom_speed)
+        # Fraction down the bbox to aim the camera at (0.5 = center, lower values
+        # aim higher toward the head so the face is framed instead of the torso).
+        self.vertical_aim_ratio = vertical_aim_ratio
         self.async_commands = async_commands
         self.last_command = "ptzstop"
         self.last_speed = 0
@@ -335,6 +339,14 @@ class QonVelocityPTZController:
         self.last_speed = 0
         self.last_sent_at = time.monotonic()
 
+    def reset_view(self) -> None:
+        """Stop motion and return to a wide home view for re-registration."""
+        self.stop()
+        try:
+            self.control.home()
+        except Exception as exc:  # pragma: no cover - depends on camera/network failures.
+            self.last_error = exc
+
     def close(self) -> None:
         self.stop()
         if self._worker is not None:
@@ -351,7 +363,7 @@ class QonVelocityPTZController:
         frame_h, frame_w = frame_shape[:2]
         x1, y1, x2, y2 = bbox
         cx = (x1 + x2) / 2.0
-        cy = (y1 + y2) / 2.0
+        cy = y1 + self.vertical_aim_ratio * (y2 - y1)
         error_x = (cx - frame_w / 2.0) / max(frame_w / 2.0, 1.0)
         error_y = (cy - frame_h / 2.0) / max(frame_h / 2.0, 1.0)
         if abs(error_x) <= self.dead_zone_ratio and abs(error_y) <= self.dead_zone_ratio:

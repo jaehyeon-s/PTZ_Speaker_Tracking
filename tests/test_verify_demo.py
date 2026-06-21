@@ -214,6 +214,7 @@ class VerifyDemoSmokeTests(unittest.TestCase):
             ptz_max_speed=10,
             ptz_zoom=False,
             ptz_target_height_ratio=0.6,
+            ptz_vertical_aim_ratio=0.3,
         )
 
         controller = build_ptz_controller(args, object())
@@ -316,15 +317,15 @@ class LostResetTests(unittest.TestCase):
         )
         supervisor = SimpleNamespace(tracking_enabled=True)
         supervisor.reset_for_registration = lambda: setattr(supervisor, "tracking_enabled", False)
-        ptz = SimpleNamespace(stopped=False)
-        ptz.stop = lambda: setattr(ptz, "stopped", True)
+        ptz = SimpleNamespace(view_reset=False)
+        ptz.reset_view = lambda: setattr(ptz, "view_reset", True)
 
         perform_lost_reset(provider, verifier, supervisor, ptz)
 
         self.assertFalse(verifier.registered)
         self.assertEqual(verifier.unregister_calls, 1)
         self.assertFalse(supervisor.tracking_enabled)
-        self.assertTrue(ptz.stopped)
+        self.assertTrue(ptz.view_reset)
         self.assertIsNone(provider.last_trusted_bbox)
 
 
