@@ -77,6 +77,11 @@ ptz:
   # Raise zoom_hysteresis if zoom-in/zoom-out still oscillates.
   zoom_hysteresis: 0.1
   zoom_smoothing: 0.3
+  # After LOST reset: go home (wide), then zoom in this many seconds to hold a
+  # medium framing where a raised hand is big enough to register. Increase for a
+  # tighter view, decrease (or 0) for wider.
+  reset_zoom_in_seconds: 1.2
+  reset_home_settle_seconds: 0.8
 
 logging:
   csv: logs/identity_supervisor.csv

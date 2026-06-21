@@ -160,6 +160,38 @@ class QonTrackingControlTests(unittest.TestCase):
         action = ptz.follow_bbox((90, 12, 110, 88), frame)
         self.assertTrue(action.startswith("zoomout:"))
 
+    def test_reset_view_homes_then_zooms_in_to_medium(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+        ptz = QonVelocityPTZController(
+            control,
+            zoom_enabled=True,
+            zoom_speed=3,
+            reset_zoom_in_seconds=0.01,
+            reset_home_settle_seconds=0.0,
+        )
+
+        ptz.reset_view()
+
+        urls = [request.full_url for request, _ in opener.requests]
+        # ptzstop (from stop) -> home -> zoomin -> zoomstop, in order.
+        self.assertTrue(any("home" in url for url in urls))
+        home_idx = next(i for i, url in enumerate(urls) if "home" in url)
+        self.assertTrue(any("zoomin" in url for url in urls[home_idx:]))
+        zoomin_idx = next(i for i, url in enumerate(urls) if "zoomin" in url)
+        self.assertTrue(any("zoomstop" in url for url in urls[zoomin_idx:]))
+
+    def test_reset_view_stays_wide_when_zoom_in_seconds_zero(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+        ptz = QonVelocityPTZController(control, zoom_enabled=True, reset_zoom_in_seconds=0.0)
+
+        ptz.reset_view()
+
+        urls = [request.full_url for request, _ in opener.requests]
+        self.assertTrue(any("home" in url for url in urls))
+        self.assertFalse(any("zoomin" in url for url in urls))
+
     def test_velocity_ptz_aims_up_for_face_when_vertical_aim_is_high(self):
         opener = FakeOpener()
         control = QonTrackingControl("http://camera", opener=opener)

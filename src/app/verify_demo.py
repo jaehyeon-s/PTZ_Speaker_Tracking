@@ -252,6 +252,18 @@ def parse_args() -> argparse.Namespace:
         help="EMA factor (0-1) smoothing the measured subject height before zoom decisions",
     )
     parser.add_argument(
+        "--ptz-reset-zoom-in-seconds",
+        type=float,
+        default=config_value(config, "ptz_reset_zoom_in_seconds", "ptz.reset_zoom_in_seconds", default=1.2),
+        help="After LOST reset, seconds to zoom in from home so re-registration framing is medium (0 = stay wide)",
+    )
+    parser.add_argument(
+        "--ptz-reset-home-settle-seconds",
+        type=float,
+        default=config_value(config, "ptz_reset_home_settle_seconds", "ptz.reset_home_settle_seconds", default=0.8),
+        help="Seconds to wait for the home move to finish before the reset zoom-in",
+    )
+    parser.add_argument(
         "--recovery-action",
         choices=("none", "stop", "home", "zoomout"),
         default=config_value(config, "recovery_action", "recovery.action", default="home"),
@@ -804,6 +816,8 @@ def build_ptz_controller(args, camera_control):
         vertical_aim_ratio=args.ptz_vertical_aim_ratio,
         zoom_hysteresis=args.ptz_zoom_hysteresis,
         zoom_smoothing=args.ptz_zoom_smoothing,
+        reset_zoom_in_seconds=args.ptz_reset_zoom_in_seconds,
+        reset_home_settle_seconds=args.ptz_reset_home_settle_seconds,
     )
 
 

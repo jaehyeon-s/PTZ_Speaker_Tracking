@@ -274,6 +274,8 @@ class QonVelocityPTZController:
         vertical_aim_ratio: float = 0.5,
         zoom_hysteresis: float = 0.08,
         zoom_smoothing: float = 0.3,
+        reset_zoom_in_seconds: float = 1.2,
+        reset_home_settle_seconds: float = 0.8,
     ) -> None:
         self.control = control
         self.dead_zone_ratio = dead_zone_ratio
@@ -291,6 +293,10 @@ class QonVelocityPTZController:
         self.zoom_smoothing = min(1.0, max(0.05, zoom_smoothing))
         self._zoom_ratio_ema: float | None = None
         self._zoom_settled = False
+        # On LOST reset, go home (wide) then zoom in for this long to hold a medium
+        # framing where a raised hand is large enough to be recognised.
+        self.reset_zoom_in_seconds = max(0.0, reset_zoom_in_seconds)
+        self.reset_home_settle_seconds = max(0.0, reset_home_settle_seconds)
         # Fraction down the bbox to aim the camera at (0.5 = center, lower values
         # aim higher toward the head so the face is framed instead of the torso).
         self.vertical_aim_ratio = vertical_aim_ratio
@@ -365,12 +371,23 @@ class QonVelocityPTZController:
         self.last_sent_at = time.monotonic()
 
     def reset_view(self) -> None:
-        """Stop motion and return to a wide home view for re-registration."""
+        """Return to a fixed medium-zoom view for re-registration.
+
+        Goes to the wide home reference, then zooms in for ``reset_zoom_in_seconds``
+        so the framing is close enough that a raised-hand gesture is recognised,
+        then holds (no further motion until a new presenter is registered).
+        """
         self.stop()
         self._zoom_ratio_ema = None
         self._zoom_settled = False
         try:
             self.control.home()
+            if self.zoom_enabled and self.reset_zoom_in_seconds > 0:
+                if self.reset_home_settle_seconds > 0:
+                    time.sleep(self.reset_home_settle_seconds)
+                self.control.zoom_in(self.zoom_speed)
+                time.sleep(self.reset_zoom_in_seconds)
+                self.control.zoom_stop(self.zoom_speed)
         except Exception as exc:  # pragma: no cover - depends on camera/network failures.
             self.last_error = exc
 
