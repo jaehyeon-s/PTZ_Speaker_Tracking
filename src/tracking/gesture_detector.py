@@ -25,6 +25,7 @@ class GestureFallbackDetector:
         self._pose = None
         self._mp_pose = None
         self._pose_init_attempted = False
+        self._last_debug_at = 0.0
 
     def update(
         self,
@@ -35,6 +36,8 @@ class GestureFallbackDetector:
         raised = raised_hand_indices or set()
 
         if len(raised) != 1:
+            if self.debug and self._candidate_index is not None:
+                print("[GESTURE] hold reset (need exactly one raised hand held still)")
             self._candidate_index = None
             self._candidate_since = None
             return None
@@ -49,8 +52,12 @@ class GestureFallbackDetector:
             self._candidate_since = now
             return None
 
-        if self._candidate_since is not None and now - self._candidate_since >= self.hold_seconds:
+        held = now - self._candidate_since if self._candidate_since is not None else 0.0
+        if held >= self.hold_seconds:
+            if self.debug:
+                print(f"[GESTURE] hold complete ({held:.1f}s) -> registering person {index}")
             return people_list[index]
+        self._debug(f"holding person {index} {held:.1f}s / {self.hold_seconds:.1f}s")
         return None
 
     def detect_raised_hand_indices(self, frame, people: Iterable[PersonDetection]) -> set[int]:
@@ -77,6 +84,7 @@ class GestureFallbackDetector:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         result = self._pose.process(rgb)
         if not result.pose_landmarks:
+            self._debug(f"people={len(people_list)} pose=none (stand fully in view, move closer / improve lighting)")
             return set()
 
         landmarks = result.pose_landmarks.landmark
@@ -100,11 +108,27 @@ class GestureFallbackDetector:
         for point in raised_points:
             for index, person in enumerate(people_list):
                 x, y, w, h = person.bbox
-                expanded = (x - w * 0.25, y - h * 0.35, w * 1.5, h * 1.35)
+                # Expand generously upward: a fully raised hand lands well above the body box.
+                expanded = (x - w * 0.25, y - h * 0.6, w * 1.5, h * 1.7)
                 ex, ey, ew, eh = expanded
                 if ex <= point[0] <= ex + ew and ey <= point[1] <= ey + eh:
                     raised_indices.add(index)
+
+        if self.debug:
+            if not raised_points:
+                self._debug(f"people={len(people_list)} pose=yes hand=down (raise wrist above shoulder)")
+            elif not raised_indices:
+                self._debug(f"people={len(people_list)} hand=up but not matched to a person box")
         return raised_indices
+
+    def _debug(self, message: str) -> None:
+        if not self.debug:
+            return
+        now = time.monotonic()
+        if now - self._last_debug_at < 0.5:
+            return
+        self._last_debug_at = now
+        print(f"[GESTURE] {message}")
 
     def _init_pose(self) -> None:
         self._pose_init_attempted = True
