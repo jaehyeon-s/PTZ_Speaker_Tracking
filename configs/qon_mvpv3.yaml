@@ -72,6 +72,11 @@ ptz:
   target_height_ratio: 0.6
   # Aim at the upper body (~0.3 down the box) so the face is framed, not the torso.
   vertical_aim_ratio: 0.3
+  # Anti-hunting: after the subject fills the target band, the height must drift by
+  # tolerance(0.08)+hysteresis before zooming again, and height is EMA-smoothed.
+  # Raise zoom_hysteresis if zoom-in/zoom-out still oscillates.
+  zoom_hysteresis: 0.1
+  zoom_smoothing: 0.3
 
 logging:
   csv: logs/identity_supervisor.csv

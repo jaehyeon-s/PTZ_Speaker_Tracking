@@ -136,6 +136,30 @@ class QonTrackingControlTests(unittest.TestCase):
         self.assertTrue(action.startswith("zoomin:"))
         self.assertIn("ptzcmd&zoomin&3", zoom_url)
 
+    def test_velocity_ptz_does_not_hunt_zoom_within_hysteresis_band(self):
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+        ptz = QonVelocityPTZController(
+            control,
+            dead_zone_ratio=0.2,
+            zoom_enabled=True,
+            target_height_ratio=0.6,
+            zoom_tolerance=0.05,
+            zoom_hysteresis=0.1,
+            zoom_smoothing=1.0,  # no EMA lag, isolate the hysteresis logic
+            zoom_speed=3,
+        )
+        frame = (100, 200, 3)
+
+        # Subject exactly on target -> settles, no zoom.
+        self.assertEqual(ptz.follow_bbox((90, 20, 110, 80), frame), "ptzstop")
+        # Small wobble inside the outer band (height 0.62, 0.58) must NOT zoom.
+        self.assertEqual(ptz.follow_bbox((90, 20, 110, 82), frame), "ptzstop")
+        self.assertEqual(ptz.follow_bbox((90, 21, 110, 79), frame), "ptzstop")
+        # A real drift past the outer band (height 0.76 > 0.70) resumes zooming out.
+        action = ptz.follow_bbox((90, 12, 110, 88), frame)
+        self.assertTrue(action.startswith("zoomout:"))
+
     def test_velocity_ptz_aims_up_for_face_when_vertical_aim_is_high(self):
         opener = FakeOpener()
         control = QonTrackingControl("http://camera", opener=opener)

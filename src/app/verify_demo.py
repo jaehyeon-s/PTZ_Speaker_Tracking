@@ -240,6 +240,18 @@ def parse_args() -> argparse.Namespace:
         help="Fraction down the bbox to aim at; lower (e.g. 0.3) frames the face instead of the torso",
     )
     parser.add_argument(
+        "--ptz-zoom-hysteresis",
+        type=float,
+        default=config_value(config, "ptz_zoom_hysteresis", "ptz.zoom_hysteresis", default=0.08),
+        help="Extra band beyond tolerance the subject must cross before zooming again (anti-hunting)",
+    )
+    parser.add_argument(
+        "--ptz-zoom-smoothing",
+        type=float,
+        default=config_value(config, "ptz_zoom_smoothing", "ptz.zoom_smoothing", default=0.3),
+        help="EMA factor (0-1) smoothing the measured subject height before zoom decisions",
+    )
+    parser.add_argument(
         "--recovery-action",
         choices=("none", "stop", "home", "zoomout"),
         default=config_value(config, "recovery_action", "recovery.action", default="home"),
@@ -790,6 +802,8 @@ def build_ptz_controller(args, camera_control):
         zoom_enabled=args.ptz_zoom,
         target_height_ratio=args.ptz_target_height_ratio,
         vertical_aim_ratio=args.ptz_vertical_aim_ratio,
+        zoom_hysteresis=args.ptz_zoom_hysteresis,
+        zoom_smoothing=args.ptz_zoom_smoothing,
     )
 
 

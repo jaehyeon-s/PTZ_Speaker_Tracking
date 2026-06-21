@@ -272,6 +272,8 @@ class QonVelocityPTZController:
         zoom_tolerance: float = 0.08,
         zoom_speed: int = 3,
         vertical_aim_ratio: float = 0.5,
+        zoom_hysteresis: float = 0.08,
+        zoom_smoothing: float = 0.3,
     ) -> None:
         self.control = control
         self.dead_zone_ratio = dead_zone_ratio
@@ -282,6 +284,13 @@ class QonVelocityPTZController:
         self.target_height_ratio = target_height_ratio
         self.zoom_tolerance = zoom_tolerance
         self.zoom_speed = max(1, zoom_speed)
+        # Anti-hunting: once the subject fills the target band, require a larger
+        # excursion (tolerance + hysteresis) before zooming again, and smooth the
+        # measured height so per-frame detection jitter does not flip zoom.
+        self.zoom_hysteresis = max(0.0, zoom_hysteresis)
+        self.zoom_smoothing = min(1.0, max(0.05, zoom_smoothing))
+        self._zoom_ratio_ema: float | None = None
+        self._zoom_settled = False
         # Fraction down the bbox to aim the camera at (0.5 = center, lower values
         # aim higher toward the head so the face is framed instead of the torso).
         self.vertical_aim_ratio = vertical_aim_ratio
@@ -325,12 +334,28 @@ class QonVelocityPTZController:
             return "ptzstop", 0
         frame_h = frame_shape[0]
         _, y1, _, y2 = bbox
-        height_ratio = (y2 - y1) / max(float(frame_h), 1.0)
-        if height_ratio < self.target_height_ratio - self.zoom_tolerance:
+        raw_ratio = (y2 - y1) / max(float(frame_h), 1.0)
+        # Smooth the measured height to reject per-frame detection jitter.
+        if self._zoom_ratio_ema is None:
+            self._zoom_ratio_ema = raw_ratio
+        else:
+            self._zoom_ratio_ema += self.zoom_smoothing * (raw_ratio - self._zoom_ratio_ema)
+        ratio = self._zoom_ratio_ema
+        error = ratio - self.target_height_ratio
+        inner = self.zoom_tolerance
+        outer = self.zoom_tolerance + self.zoom_hysteresis
+        # Once settled in the target band, hold until the subject drifts past the
+        # wider outer band; this is what stops the zoomin/zoomout oscillation.
+        if self._zoom_settled:
+            if abs(error) <= outer:
+                return "ptzstop", 0
+            self._zoom_settled = False
+        if abs(error) <= inner:
+            self._zoom_settled = True
+            return "ptzstop", 0
+        if error < 0:
             return "zoomin", self.zoom_speed
-        if height_ratio > self.target_height_ratio + self.zoom_tolerance:
-            return "zoomout", self.zoom_speed
-        return "ptzstop", 0
+        return "zoomout", self.zoom_speed
 
     def stop(self) -> None:
         if self.last_command != "ptzstop":
@@ -342,6 +367,8 @@ class QonVelocityPTZController:
     def reset_view(self) -> None:
         """Stop motion and return to a wide home view for re-registration."""
         self.stop()
+        self._zoom_ratio_ema = None
+        self._zoom_settled = False
         try:
             self.control.home()
         except Exception as exc:  # pragma: no cover - depends on camera/network failures.
