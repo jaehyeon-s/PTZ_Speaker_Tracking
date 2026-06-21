@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Logs</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="container detail-container">
+    <header class="top-bar">
+        <h1>System Logs</h1>
+        <div class="status-badges">
+            <a class="top-link" href="/">Dashboard</a>
+            <a class="top-link" href="/tracking">Tracking / Recovery</a>
+            <a class="top-link danger-link" href="/logout">Logout</a>
+        </div>
+    </header>
+    <section class="log-card detail-log-card">
+        <h2>System Log (별도 로그 화면)</h2>
+        <div id="serverLogBox" class="server-log-box"></div>
+    </section>
+</div>
+<script src="/static/js/logs.js"></script>
+</body>
+</html>

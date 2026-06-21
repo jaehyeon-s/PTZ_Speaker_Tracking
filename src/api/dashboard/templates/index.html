@@ -8,23 +8,30 @@
 </head>
 <body>
 <div class="container">
-
     <header class="top-bar">
         <h1>PTZ Speaker Tracking Dashboard</h1>
         <div class="status-badges">
             <span class="badge green">Camera Connected</span>
             <span class="badge green">RTSP Active</span>
             <span class="badge yellow" id="sessionBadge">Session IDLE</span>
+            <a class="top-link" href="/tracking" target="_blank">Tracking / Recovery</a>
+            <a class="top-link" href="/logs" target="_blank">Logs</a>
+            <a class="top-link danger-link" href="/logout">Logout</a>
         </div>
     </header>
 
     <div class="main-content">
-
         <div class="left-panel">
             <div class="video-card">
                 <div class="card-header">
                     <h2>Live View</h2>
-                    <span class="muted-text">640×480 · 30FPS · RTSP</span>
+                    <div class="header-tools">
+                        <label class="switch-row compact-switch">
+                            <input id="bboxToggle" type="checkbox" checked>
+                            <span>B-Box ON/OFF</span>
+                        </label>
+                        <span class="muted-text">640×480 · 30FPS · RTSP</span>
+                    </div>
                 </div>
 
                 <div class="video-box">
@@ -35,47 +42,24 @@
                 </div>
             </div>
 
-            <div class="preset-card">
+            <div class="preset-card compact-position-card">
                 <div class="card-header">
-                    <h2>프리셋 선택</h2>
-                    <span class="muted-text">현재 모드에 따라 저장된 위치를 호출합니다</span>
+                    <h2>Tracking Start Position</h2>
+                    <span class="muted-text">추적 시작 위치 / 발표자 위치 설정</span>
                 </div>
-
-                <div class="preset-grid">
-                    <button class="preset-btn primary">전체 적용</button>
-                    <button class="preset-btn">프로젝트(좌)</button>
-                    <button class="preset-btn active">프로젝트(중)</button>
-                    <button class="preset-btn">프로젝트(우)</button>
-                    <button class="preset-btn">PC</button>
-                    <button class="preset-btn">노트북</button>
-                    <button class="preset-btn">Rev1</button>
-                    <button class="preset-btn">Rev2</button>
-                </div>
-
-                <div class="position-preset-card">
-                    <p class="group-title">위치 기반 프리셋</p>
+                <div class="position-preset-card only-position-card">
+                    <p class="group-title">Character Position</p>
                     <div class="position-layout">
-                        <button class="preset-btn pos-left position-btn">좌</button>
-                        <button class="preset-btn pos-center position-btn active">중앙</button>
-                        <button class="preset-btn pos-right position-btn">우</button>
-                        <button class="preset-btn pos-wide position-btn">와이드</button>
+                        <button class="preset-btn pos-left position-btn">Left</button>
+                        <button class="preset-btn pos-center position-btn active">Middle</button>
+                        <button class="preset-btn pos-right position-btn">Right</button>
+                        <button class="preset-btn pos-wide position-btn">Wide</button>
                     </div>
-                </div>
-            </div>
-
-            <div class="log-card">
-                <h2>System Log</h2>
-                <div id="log-box" class="log-box">
-                    <p>[INFO] RTSP stream connected</p>
-                    <p>[INFO] YOLO26n NCNN initialized</p>
-                    <p>[INFO] ByteTrack + Zone Lock ready</p>
-                    <p>[INFO] Priority Dashboard Layout ready</p>
                 </div>
             </div>
         </div>
 
         <aside class="right-panel">
-
             <div class="control-card priority-control-card">
                 <h2>Camera Control (카메라 수동 제어)</h2>
 
@@ -108,18 +92,12 @@
                     <button id="unlockBtn">Unlock</button>
                     <button id="zoneBtn">Zone Lock</button>
                 </div>
-            </div>
 
-            <div class="status-card demo-card">
-                <h2>Final Demo Flow (최종 시연 흐름)</h2>
-                <p>Current Step: <span id="demoStepValue">-</span></p>
-                <p>Current Action: <span id="demoActionValue">-</span></p>
-                <p>Presenter Registration: <span id="presenterRegistrationValue">-</span></p>
-                <p>Camera Presenter Mode: <span id="cameraPresenterModeValue">-</span></p>
-                <p>Auto Tracking: <span id="autoTrackingValue">-</span></p>
-                <p>Mismatch Monitor: <span id="mismatchMonitorValue">-</span></p>
-                <p>Zone Fallback: <span id="zoneFallbackValue">-</span></p>
-                <p>Recovery Result: <span id="recoveryResultValue">-</span></p>
+                <div class="control-group danger-control-group">
+                    <p class="group-title">시스템 관리</p>
+                    <button id="resetBtn" class="warning-btn">System Reset</button>
+                    <button id="rebootBtn" class="danger-btn">Reboot</button>
+                </div>
             </div>
 
             <div class="status-card health-card">
@@ -135,25 +113,6 @@
                 <p>Warnings: <span id="healthWarningsValue">-</span></p>
             </div>
 
-            <div class="status-card mode-card">
-                <h2>Tracking Mode (현재 추적 모드)</h2>
-                <p>Current Mode: <span id="currentModeValue" class="mode-chip">-</span></p>
-                <p>Camera Mode: <span id="cameraModeValue">-</span></p>
-                <p>Tracking Source: <span id="trackingSourceValue">-</span></p>
-                <p>Target Type: <span id="targetTypeValue">-</span></p>
-                <p>ArUco Status: <span id="arucoStatusValue">-</span></p>
-                <p>Mode Reason: <span id="modeReasonValue">-</span></p>
-            </div>
-
-            <div class="status-card recovery-card">
-                <h2>Recovery Action (복구 동작 상태)</h2>
-                <p>Mismatch Count: <span id="mismatchCountValue">-</span></p>
-                <p>Recovery Trigger: <span id="recoveryTriggerValue">-</span></p>
-                <p>Current Action: <span id="recoveryActionValue">-</span></p>
-                <p>Recovery State: <span id="recoveryStateValue">-</span></p>
-                <p>Last Recovery: <span id="lastRecoveryValue">-</span></p>
-            </div>
-
             <div class="status-card">
                 <h2>Re-ID Monitor (재식별 상태)</h2>
                 <p>Re-ID State: <span id="reidStateValue">-</span></p>
@@ -166,48 +125,6 @@
             </div>
 
             <div class="status-card">
-                <h2>Virtual PTZ Simulator (가상 PTZ 시뮬레이터)</h2>
-                <p>Pan Direction: <span id="panDirectionValue">-</span></p>
-                <p>Tilt Direction: <span id="tiltDirectionValue">-</span></p>
-                <p>Zoom State: <span id="zoomStateValue">-</span></p>
-                <p>Offset X: <span id="offsetXValue">-</span> px</p>
-                <p>Offset Y: <span id="offsetYValue">-</span> px</p>
-            </div>
-
-            <div class="status-card ownership-card">
-                <h2>Control Ownership (제어권 상태)</h2>
-                <p>Control Owner: <span id="controlOwnerValue">-</span></p>
-                <p>Tracking Engine: <span id="trackingEngineValue">-</span></p>
-                <p>Conflict Status: <span id="conflictStatusValue">-</span></p>
-                <p>Control Policy: <span id="controlPolicyValue">-</span></p>
-            </div>
-
-            <div class="status-card integration-card">
-                <h2>Integration Readiness (통합 준비 상태)</h2>
-                <div class="integration-score-wrap">
-                    <span id="integrationScoreValue" class="integration-score">-</span>
-                    <span class="health-total">/ 100</span>
-                </div>
-                <p>Level: <span id="integrationLevelValue" class="integration-badge">-</span></p>
-                <p>Data Source: <span id="dataSourceValue">-</span></p>
-                <p>Backend Connection: <span id="backendConnectionValue">-</span></p>
-                <p>API Contract: <span id="apiContractValue">-</span></p>
-                <p>Next Action: <span id="nextActionValue">-</span></p>
-            </div>
-
-            <div class="status-card module-card">
-                <h2>Module Connection (모듈 연결 상태)</h2>
-                <p>Vision Backend: <span id="visionBackendValue">-</span></p>
-                <p>ByteTrack: <span id="bytetrackValue">-</span></p>
-                <p>Zone Lock: <span id="zoneModuleValue">-</span></p>
-                <p>Re-ID HSV: <span id="reidHsvValue">-</span></p>
-                <p>Re-ID OSNet: <span id="reidOsnetValue">-</span></p>
-                <p>ArUco Marker: <span id="arucoModuleValue">-</span></p>
-                <p>PTZ Camera: <span id="ptzCameraValue">-</span></p>
-                <p>Dashboard API: <span id="dashboardApiValue">-</span></p>
-            </div>
-
-            <div class="status-card">
                 <h2>System Status (기본 시스템 상태)</h2>
                 <p>Detector: <span id="detectorValue">-</span></p>
                 <p>Tracker: <span id="trackerValue">-</span></p>
@@ -216,31 +133,12 @@
                 <p>Zone Lock: <span id="zoneLockValue">-</span></p>
                 <p>PTZ: <span id="ptzValue">-</span></p>
                 <p>Session: <span id="sessionValue">-</span></p>
+                <p>B-Box: <span id="bboxValue">-</span></p>
+                <p>Last Action: <span id="lastSystemActionValue">-</span></p>
             </div>
-
-            <div class="status-card">
-                <h2>Tracking Debug (추적 디버깅 정보)</h2>
-                <p>Current Target: <span id="debugTargetValue">-</span></p>
-                <p>Total Detections: <span id="totalDetectionsValue">-</span></p>
-                <p>Inside Zone: <span id="insideZoneValue">-</span></p>
-                <p>Outside Zone: <span id="outsideZoneValue">-</span></p>
-                <p>Track Stability: <span id="trackStabilityValue">-</span></p>
-                <p>Last Re-ID: <span id="lastReidValue">-</span></p>
-                <p>ID Switch Count: <span id="idSwitchValue">-</span></p>
-            </div>
-
-            <div class="status-card">
-                <h2>Re-ID Timeline (이벤트 기록)</h2>
-                <div id="reidTimelineBox" class="timeline-box">
-                    <p class="timeline-empty">No Re-ID events yet</p>
-                </div>
-            </div>
-
         </aside>
-
     </div>
 </div>
-
 <script src="/static/js/app.js"></script>
 </body>
 </html>

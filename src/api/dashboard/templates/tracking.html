@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking / Recovery Detail</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="container detail-container">
+    <header class="top-bar">
+        <h1>Tracking / Recovery Detail</h1>
+        <div class="status-badges">
+            <a class="top-link" href="/">Dashboard</a>
+            <a class="top-link" href="/logs">Logs</a>
+            <a class="top-link danger-link" href="/logout">Logout</a>
+        </div>
+    </header>
+
+    <div class="detail-grid">
+        <section class="status-card mode-card fixed-scroll-card">
+            <h2>Tracking Mode (현재 추적 모드)</h2>
+            <p>Current Mode: <span id="currentModeValue" class="mode-chip">-</span></p>
+            <p>Camera Mode: <span id="cameraModeValue">-</span></p>
+            <p>Tracking Source: <span id="trackingSourceValue">-</span></p>
+            <p>Target Type: <span id="targetTypeValue">-</span></p>
+            <p>ArUco Status: <span id="arucoStatusValue">-</span></p>
+            <p>Mode Reason: <span id="modeReasonValue">-</span></p>
+        </section>
+
+        <section class="status-card recovery-card fixed-scroll-card">
+            <h2>Recovery Action (복구 동작 상태)</h2>
+            <p>Mismatch Count: <span id="mismatchCountValue">-</span></p>
+            <p>Recovery Trigger: <span id="recoveryTriggerValue">-</span></p>
+            <p>Current Action: <span id="recoveryActionValue">-</span></p>
+            <p>Recovery State: <span id="recoveryStateValue">-</span></p>
+            <p>Last Recovery: <span id="lastRecoveryValue">-</span></p>
+        </section>
+
+        <section class="status-card fixed-scroll-card wide-detail-card">
+            <h2>Re-ID Timeline (이벤트 기록)</h2>
+            <div id="reidTimelineBox" class="timeline-box detail-timeline-box">
+                <p class="timeline-empty">No Re-ID events yet</p>
+            </div>
+        </section>
+    </div>
+</div>
+<script src="/static/js/tracking_detail.js"></script>
+</body>
+</html>
