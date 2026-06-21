@@ -11,7 +11,6 @@ from typing import Any
 
 from src.camera.qon_control import QonTrackingControl, QonVelocityPTZController
 from src.camera.region_provider import CenterCropRegionProvider, IdentityMatchedRegionProvider, JsonlRegionProvider
-from src.recovery.candidate_detector import YoloRecoveryDetector
 from src.reid.appearance import TrackIdReIdentifier, build_re_identifier
 from src.reid.verifier import PresenterVerifier, VerifierConfig
 from src.tracking.gesture_detector import GestureFallbackDetector
@@ -390,11 +389,6 @@ def main() -> int:
     )
     ptz_camera_control = build_camera_control(args, timeout=args.ptz_timeout) if args.ptz_follow_target else camera_control
     ptz_controller = build_ptz_controller(args, ptz_camera_control)
-    recovery_detector = (
-        YoloRecoveryDetector(args.recovery_model, args.recovery_imgsz, args.recovery_confidence, args.device)
-        if args.recovery_model
-        else None
-    )
     registration_bbox = parse_bbox(args.register_bbox)
     writer = None
     log_file = None
@@ -524,17 +518,6 @@ def main() -> int:
                 else:
                     last_result = verifier.verify(frame, bbox, region_source)
                 recovery_bbox, recovery_score = None, 0.0
-                if last_result.event == "PRESENTER_MISMATCH" and recovery_detector is not None:
-                    candidate, recovery_score = verifier.find_presenter(frame, recovery_detector.detect(frame))
-                    if candidate is not None:
-                        recovery_bbox = candidate.bbox
-                        last_result = VerificationResult(
-                            last_result.state,
-                            last_result.bbox,
-                            last_result.score,
-                            "RECOVERY_CANDIDATE_FOUND",
-                            last_result.source,
-                        )
                 if last_result.event in ("PRESENTER_MISMATCH", "PRESENTER_MISTRACK_CONFIRMED"):
                     supervisor.confirm_mismatch()
                 print_status(frame_index, last_result, recovery_bbox, recovery_score, fps, read_ms, detect_ms)
