@@ -320,6 +320,7 @@ class QonVelocityPTZController:
         self._closed = False
         self._condition = threading.Condition()
         self._worker: threading.Thread | None = None
+        self._reset_thread: threading.Thread | None = None
         if self.async_commands:
             self._worker = threading.Thread(target=self._send_loop, daemon=True)
             self._worker.start()
@@ -374,11 +375,24 @@ class QonVelocityPTZController:
         return "zoomout", self.zoom_speed
 
     def stop(self) -> None:
-        if self.last_command != "ptzstop":
-            self._send("ptzstop", 10, 10)
+        """Request ptzstop, retrying at ``command_ttl_seconds`` cadence.
+
+        A dropped HTTP response must not leave the camera moving forever: the
+        async worker swallows send failures into ``last_error`` with no
+        confirmation path back to the caller, so this cannot mark ptzstop as
+        delivered just because it was queued once. The caller (the tracking
+        loop calls ``stop()`` every frame while not aligned) re-issues the
+        command on the same cadence as movement commands until one actually
+        lands, instead of a single fire-and-forget send.
+        """
+        now = time.monotonic()
+        already_requested = self.last_command == "ptzstop"
+        if already_requested and now - self.last_sent_at < self.command_ttl_seconds:
+            return
+        self._send("ptzstop", 10, 10)
         self.last_command = "ptzstop"
         self.last_speed = 0
-        self.last_sent_at = time.monotonic()
+        self.last_sent_at = now
 
     def reset_view(self) -> None:
         """Return to a fixed medium-zoom view for re-registration.
@@ -386,6 +400,13 @@ class QonVelocityPTZController:
         Goes to the wide home reference, then zooms in for ``reset_zoom_in_seconds``
         so the framing is close enough that a raised-hand gesture is recognised,
         then holds (no further motion until a new presenter is registered).
+
+        Runs the home/zoom sequence on a background thread: it needs up to
+        ``reset_home_settle_seconds + reset_zoom_in_seconds`` of sleeps plus
+        camera round-trips, and blocking the tracking loop's thread for that
+        long would stall frame processing, logging, and the UI. ``zoom_stop``
+        is retried until it is confirmed so a dropped response cannot leave
+        the camera zooming in indefinitely.
         """
         self.stop()
         self._zoom_ratio_ema = None
@@ -393,6 +414,17 @@ class QonVelocityPTZController:
         self._aim_ex_ema = None
         self._aim_ey_ema = None
         self._aim_settled = False
+        if self._reset_thread is not None and self._reset_thread.is_alive():
+            return
+        self._reset_thread = threading.Thread(target=self._run_reset_view, daemon=True)
+        self._reset_thread.start()
+
+    def wait_for_reset(self, timeout: float | None = None) -> None:
+        """Block until an in-flight ``reset_view()`` sequence finishes (for tests/shutdown)."""
+        if self._reset_thread is not None:
+            self._reset_thread.join(timeout=timeout)
+
+    def _run_reset_view(self) -> None:
         try:
             self.control.home()
             if self.zoom_enabled and self.reset_zoom_in_seconds > 0:
@@ -400,9 +432,19 @@ class QonVelocityPTZController:
                     time.sleep(self.reset_home_settle_seconds)
                 self.control.zoom_in(self.zoom_speed)
                 time.sleep(self.reset_zoom_in_seconds)
-                self.control.zoom_stop(self.zoom_speed)
+                self._stop_zoom_with_retries()
         except Exception as exc:  # pragma: no cover - depends on camera/network failures.
             self.last_error = exc
+
+    def _stop_zoom_with_retries(self, attempts: int = 3, retry_delay_seconds: float = 0.3) -> None:
+        for attempt in range(attempts):
+            try:
+                self.control.zoom_stop(self.zoom_speed)
+                return
+            except Exception as exc:  # pragma: no cover - depends on camera/network failures.
+                self.last_error = exc
+                if attempt < attempts - 1:
+                    time.sleep(retry_delay_seconds)
 
     def close(self) -> None:
         self.stop()
@@ -411,6 +453,8 @@ class QonVelocityPTZController:
                 self._closed = True
                 self._condition.notify()
             self._worker.join(timeout=self.close_join_timeout_seconds)
+        if self._reset_thread is not None:
+            self._reset_thread.join(timeout=self.close_join_timeout_seconds)
         try:
             self.control.stop()
         except Exception as exc:
@@ -453,7 +497,13 @@ class QonVelocityPTZController:
 
     def _send(self, command: str, speed_x: int, speed_y: int | None) -> None:
         if not self.async_commands:
-            self.control.ptz_command(command, speed_x, speed_y)
+            # Record-and-continue, matching the async worker's failure handling
+            # below: a transient network failure must not raise out of
+            # follow_bbox()/stop() and crash the tracking loop.
+            try:
+                self.control.ptz_command(command, speed_x, speed_y)
+            except Exception as exc:  # pragma: no cover - depends on camera/network failures.
+                self.last_error = exc
             return
         with self._condition:
             self._pending_command = (command, speed_x, speed_y)

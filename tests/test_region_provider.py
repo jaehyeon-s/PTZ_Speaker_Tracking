@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from src.camera.region_provider import CenterCropRegionProvider, IdentityMatchedRegionProvider, JsonlRegionProvider
+from src.reid.appearance import AppearanceGuard
 from src.tracking.target_state import PersonDetection
 from src.vision.models import TrackingState
 
@@ -149,6 +150,84 @@ class RegionProviderTests(unittest.TestCase):
 
         self.assertEqual(provider.last_people, [])
 
+    def test_identity_provider_forces_lost_when_appearance_drift_confirmed_despite_id_score(self):
+        """A trackid-style matcher that always scores 1.0 cannot notice an ID
+        switch on its own; the appearance guard must force LOST once the
+        tracked crop's appearance drifts for enough consecutive periodic checks."""
+        frame = Frame()
+        target = PersonDetection((10, 20, 20, 40))
+        detector = FakeDetector([target])
+        matcher = FakeMatcher({(10, 20, 30, 60): 1.0})
+        appearance_guard = AppearanceGuard(
+            AlwaysLowAppearanceMatcher(threshold=0.5),
+            verify_every_frames=1,
+            mismatch_limit=2,
+        )
+        provider = IdentityMatchedRegionProvider(
+            detector,
+            matcher,
+            weak_min_score=0.25,
+            identity_margin=0.05,
+            enable_center_mistrack=False,
+            appearance_guard=appearance_guard,
+        )
+
+        bbox, _ = provider.region_for_frame(1, frame)
+        self.assertEqual(bbox, (10, 20, 30, 60))
+        self.assertEqual(provider.last_observation.state, TrackingState.CAMERA_ALIGNED)
+
+        bbox, source = provider.region_for_frame(2, frame)
+        self.assertIsNone(bbox)
+        self.assertEqual(source, "identity_lost")
+        self.assertEqual(provider.last_observation.state, TrackingState.LOST)
+        self.assertEqual(provider.last_observation.event, "APPEARANCE_DRIFT_CONFIRMED")
+
+    def test_identity_provider_stays_aligned_when_appearance_guard_agrees(self):
+        frame = Frame()
+        target = PersonDetection((10, 20, 20, 40))
+        detector = FakeDetector([target])
+        matcher = FakeMatcher({(10, 20, 30, 60): 1.0})
+        appearance_guard = AppearanceGuard(
+            AlwaysHighAppearanceMatcher(threshold=0.5),
+            verify_every_frames=1,
+            mismatch_limit=2,
+        )
+        provider = IdentityMatchedRegionProvider(
+            detector,
+            matcher,
+            weak_min_score=0.25,
+            identity_margin=0.05,
+            enable_center_mistrack=False,
+            appearance_guard=appearance_guard,
+        )
+
+        bbox, _ = provider.region_for_frame(1, frame)
+
+        self.assertEqual(bbox, (10, 20, 30, 60))
+        self.assertEqual(provider.last_observation.state, TrackingState.CAMERA_ALIGNED)
+
+    def test_reset_identity_state_captures_appearance_baseline_on_reregistration(self):
+        frame = Frame()
+        detector = FakeDetector([])
+        matcher = FakeMatcher({})
+        appearance_guard = AppearanceGuard(RecordingAppearanceMatcher(), verify_every_frames=1, mismatch_limit=1)
+        provider = IdentityMatchedRegionProvider(detector, matcher, appearance_guard=appearance_guard)
+
+        provider.reset_identity_state((1, 2, 3, 4), frame)
+
+        self.assertEqual(appearance_guard.appearance_matcher.registered_bbox, (1, 2, 3, 4))
+
+    def test_reset_identity_state_clears_appearance_guard_on_full_reset(self):
+        detector = FakeDetector([])
+        matcher = FakeMatcher({})
+        recording = RecordingAppearanceMatcher()
+        appearance_guard = AppearanceGuard(recording, verify_every_frames=1, mismatch_limit=1)
+        provider = IdentityMatchedRegionProvider(detector, matcher, appearance_guard=appearance_guard)
+
+        provider.reset_identity_state(None)
+
+        self.assertTrue(recording.reset_called)
+
 
 class FakeDetector:
     def __init__(self, people):
@@ -168,6 +247,54 @@ class FakeMatcher:
     def score(self, frame, bbox):
         del frame
         return self.scores[bbox]
+
+
+class AlwaysLowAppearanceMatcher:
+    def __init__(self, threshold=0.5):
+        self.threshold = threshold
+
+    def register(self, frame, bbox):
+        del frame, bbox
+
+    def score(self, frame, bbox):
+        del frame, bbox
+        return 0.0
+
+    def reset(self):
+        pass
+
+
+class AlwaysHighAppearanceMatcher:
+    def __init__(self, threshold=0.5):
+        self.threshold = threshold
+
+    def register(self, frame, bbox):
+        del frame, bbox
+
+    def score(self, frame, bbox):
+        del frame, bbox
+        return 1.0
+
+    def reset(self):
+        pass
+
+
+class RecordingAppearanceMatcher:
+    def __init__(self, threshold=0.5):
+        self.threshold = threshold
+        self.registered_bbox = None
+        self.reset_called = False
+
+    def register(self, frame, bbox):
+        del frame
+        self.registered_bbox = bbox
+
+    def score(self, frame, bbox):
+        del frame, bbox
+        return 1.0
+
+    def reset(self):
+        self.reset_called = True
 
 
 if __name__ == "__main__":

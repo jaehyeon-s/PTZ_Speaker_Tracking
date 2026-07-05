@@ -20,7 +20,11 @@ class GestureFallbackDetector:
     def __init__(self, hold_seconds: float = 1.0, debug: bool = False) -> None:
         self.hold_seconds = hold_seconds
         self.debug = debug
-        self._candidate_index: Optional[int] = None
+        # Tracked by bbox proximity, not list index: a detector's output order
+        # is not guaranteed stable frame-to-frame, so an index-based hold timer
+        # can silently keep counting for whichever person now happens to land
+        # at that index instead of the one who raised their hand.
+        self._candidate_bbox: Optional[tuple[int, int, int, int]] = None
         self._candidate_since: Optional[float] = None
         self._pose = None
         self._mp_pose = None
@@ -36,9 +40,9 @@ class GestureFallbackDetector:
         raised = raised_hand_indices or set()
 
         if len(raised) != 1:
-            if self.debug and self._candidate_index is not None:
+            if self.debug and self._candidate_bbox is not None:
                 print("[GESTURE] hold reset (need exactly one raised hand held still)")
-            self._candidate_index = None
+            self._candidate_bbox = None
             self._candidate_since = None
             return None
 
@@ -46,19 +50,35 @@ class GestureFallbackDetector:
         if index < 0 or index >= len(people_list):
             return None
 
+        candidate = people_list[index]
         now = time.monotonic()
-        if self._candidate_index != index:
-            self._candidate_index = index
+        if not self._is_same_candidate(candidate.bbox):
+            self._candidate_bbox = candidate.bbox
             self._candidate_since = now
             return None
+        self._candidate_bbox = candidate.bbox
 
         held = now - self._candidate_since if self._candidate_since is not None else 0.0
         if held >= self.hold_seconds:
             if self.debug:
-                print(f"[GESTURE] hold complete ({held:.1f}s) -> registering person {index}")
-            return people_list[index]
-        self._debug(f"holding person {index} {held:.1f}s / {self.hold_seconds:.1f}s")
+                print(f"[GESTURE] hold complete ({held:.1f}s) -> registering candidate at {candidate.bbox}")
+            return candidate
+        self._debug(f"holding candidate at {candidate.bbox} {held:.1f}s / {self.hold_seconds:.1f}s")
         return None
+
+    def _is_same_candidate(self, bbox: tuple[int, int, int, int]) -> bool:
+        """True if ``bbox`` is close enough to the last held candidate's bbox
+        to be the same physical person, rather than a different one that
+        happened to land at the same detector output index."""
+        if self._candidate_bbox is None:
+            return False
+        x, y, w, h = bbox
+        px, py, pw, ph = self._candidate_bbox
+        center = (x + w / 2.0, y + h / 2.0)
+        prev_center = (px + pw / 2.0, py + ph / 2.0)
+        distance = ((center[0] - prev_center[0]) ** 2 + (center[1] - prev_center[1]) ** 2) ** 0.5
+        gate = max(w, h, pw, ph) * 0.75
+        return distance <= gate
 
     def detect_raised_hand_indices(self, frame, people: Iterable[PersonDetection]) -> set[int]:
         """Return person indices whose wrist is above shoulder level.

@@ -11,7 +11,7 @@ from typing import Any
 
 from src.camera.qon_control import QonTrackingControl, QonVelocityPTZController
 from src.camera.region_provider import CenterCropRegionProvider, IdentityMatchedRegionProvider, JsonlRegionProvider
-from src.reid.appearance import TrackIdReIdentifier, build_re_identifier
+from src.reid.appearance import AppearanceGuard, AppearanceReIdentifier, TrackIdReIdentifier, build_re_identifier
 from src.reid.verifier import PresenterVerifier, VerifierConfig
 from src.tracking.gesture_detector import GestureFallbackDetector
 from src.tracking.marker_detector import ArucoMarkerDetector
@@ -122,6 +122,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reid-model", default=config_value(config, "reid_model", "reid.model"), help="OSNet-style ONNX Re-ID model path")
     parser.add_argument("--reid-threshold", type=float, default=config_value(config, "reid_threshold", "reid.threshold", default=0.68))
     parser.add_argument("--mismatch-limit", type=int, default=config_value(config, "mismatch_limit", "reid.mismatch_limit", default=2))
+    parser.add_argument(
+        "--appearance-drift-limit",
+        type=int,
+        default=config_value(config, "appearance_drift_limit", "reid.appearance_drift_limit", default=3),
+        help="In --region-mode trackid: consecutive failed periodic appearance checks before a "
+        "held tracker id is treated as having switched to someone else (forces LOST)",
+    )
     parser.add_argument(
         "--identity-weak-min-score",
         type=float,
@@ -474,6 +481,17 @@ def main() -> int:
             ok, frame = video.read()
             read_ms = (time.perf_counter() - read_start) * 1000.0
             if not ok:
+                # A live RTSP source retries its own reconnect in the background
+                # (see VideoSource._reconnect); a read timeout here means "still
+                # reconnecting", not "end of source", so wait instead of ending
+                # the whole tracking session over a Wi-Fi blip or camera reboot.
+                # A finite file/webcam source has no reconnect concept: ok=False
+                # there really does mean end of stream.
+                if video.is_live():
+                    if args.debug_detector:
+                        print(f"[frame {frame_index}] RTSP read failed; waiting for stream to recover")
+                    time.sleep(0.05)
+                    continue
                 break
             frame_index += 1
             fps = fps_meter.tick()
@@ -486,10 +504,14 @@ def main() -> int:
             people = []
             markers = []
             if should_collect_registration_inputs(args, verifier.registered):
-                if registration_detector is not None:
+                if registration_detector is not None and not (verifier.registered and is_identity_provider(provider)):
                     people = registration_detector.detect(frame)
                 else:
-                    # trackid mode: provider already detected this frame.
+                    # Once registered, identity/trackid providers already ran their
+                    # own detector this frame (region_for_frame populates
+                    # last_people), so reuse it instead of paying for a second full
+                    # detector pass every frame just to keep the interactive
+                    # 'r'-key re-registration path fed while a window is shown.
                     people = list(getattr(provider, "last_people", []))
             if marker_detector is not None and should_collect_markers(args, verifier.registered, should_verify, provider):
                 markers = marker_detector.detect(frame)
@@ -509,7 +531,7 @@ def main() -> int:
                         print("Could not register presenter from the available frame.")
                         return 1
                 else:
-                    reset_provider_registration_state(provider, selected_bbox)
+                    reset_provider_registration_state(provider, selected_bbox, frame)
                     last_result = VerificationResult(
                         TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
@@ -634,7 +656,7 @@ def main() -> int:
                         continue
                     if not verifier.register(frame, selected_bbox):
                         continue
-                    reset_provider_registration_state(provider, selected_bbox)
+                    reset_provider_registration_state(provider, selected_bbox, frame)
                     last_result = VerificationResult(
                         TrackingState.VERIFIED, selected_bbox, 1.0, "PRESENTER_REGISTERED", registration_source(args)
                     )
@@ -671,6 +693,15 @@ def build_tracking_stack(args):
             confidence_threshold=args.conf_threshold,
         )
         matcher = TrackIdReIdentifier(tracker)
+        # A tracker id alone cannot notice an ID switch: its score stays 1.0 for
+        # whoever now holds the id after an occlusion/crossing. Cross-check the
+        # tracked crop's appearance every verify_every_frames frames so sustained
+        # drift forces LOST instead of confidently following the wrong person.
+        appearance_guard = AppearanceGuard(
+            AppearanceReIdentifier(args.reid_threshold),
+            verify_every_frames=args.verify_every_frames,
+            mismatch_limit=args.appearance_drift_limit,
+        )
         provider = IdentityMatchedRegionProvider(
             tracker,
             matcher,
@@ -685,6 +716,7 @@ def build_tracking_stack(args):
             position_gate_ratio=args.identity_position_gate,
             detect_during_bootstrap=True,
             enable_center_mistrack=False,
+            appearance_guard=appearance_guard,
         )
         return matcher, provider
 
@@ -854,9 +886,9 @@ def is_identity_provider(provider) -> bool:
     return isinstance(provider, IdentityMatchedRegionProvider)
 
 
-def reset_provider_registration_state(provider, bbox: BBox | None) -> None:
+def reset_provider_registration_state(provider, bbox: BBox | None, frame=None) -> None:
     if is_identity_provider(provider):
-        provider.reset_identity_state(bbox)
+        provider.reset_identity_state(bbox, frame)
 
 
 def perform_lost_reset(provider, verifier, supervisor, ptz_controller) -> None:
@@ -886,7 +918,7 @@ def maybe_auto_reregister(args, frame, provider, verifier, markers, streak: int)
         return streak, None
     if not verifier.register(frame, marker_bbox):
         return 0, None
-    provider.reset_identity_state(marker_bbox)
+    provider.reset_identity_state(marker_bbox, frame)
     return 0, marker_bbox
 
 

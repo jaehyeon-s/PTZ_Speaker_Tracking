@@ -1,4 +1,5 @@
 import threading
+import time
 import unittest
 from urllib.parse import parse_qs
 
@@ -193,6 +194,7 @@ class QonTrackingControlTests(unittest.TestCase):
         )
 
         ptz.reset_view()
+        ptz.wait_for_reset(timeout=2.0)
 
         urls = [request.full_url for request, _ in opener.requests]
         # ptzstop (from stop) -> home -> zoomin -> zoomstop, in order.
@@ -208,10 +210,58 @@ class QonTrackingControlTests(unittest.TestCase):
         ptz = QonVelocityPTZController(control, zoom_enabled=True, reset_zoom_in_seconds=0.0)
 
         ptz.reset_view()
+        ptz.wait_for_reset(timeout=2.0)
 
         urls = [request.full_url for request, _ in opener.requests]
         self.assertTrue(any("home" in url for url in urls))
         self.assertFalse(any("zoomin" in url for url in urls))
+
+    def test_reset_view_runs_off_the_calling_thread(self):
+        """reset_view() must not block the caller for the home/zoom sequence."""
+        opener = FakeOpener()
+        control = QonTrackingControl("http://camera", opener=opener)
+        ptz = QonVelocityPTZController(
+            control,
+            zoom_enabled=True,
+            zoom_speed=3,
+            reset_zoom_in_seconds=0.2,
+            reset_home_settle_seconds=0.2,
+        )
+
+        start = time.monotonic()
+        ptz.reset_view()
+        elapsed = time.monotonic() - start
+
+        self.assertLess(elapsed, 0.1)
+        ptz.wait_for_reset(timeout=2.0)
+        urls = [request.full_url for request, _ in opener.requests]
+        self.assertTrue(any("zoomstop" in url for url in urls))
+
+    def test_stop_retries_on_ttl_cadence_instead_of_permanent_dedupe(self):
+        """A dropped ptzstop must be retried, not silently marked delivered forever."""
+
+        class FlakyStopControl:
+            def __init__(self):
+                self.calls = []
+                self.fail_next_stop = True
+
+            def ptz_command(self, command, speed_x, speed_y):
+                self.calls.append((command, speed_x, speed_y))
+                if command == "ptzstop" and self.fail_next_stop:
+                    self.fail_next_stop = False
+                    raise ConnectionError("simulated drop")
+
+        control = FlakyStopControl()
+        ptz = QonVelocityPTZController(control, command_ttl_seconds=0.05)
+
+        ptz.stop()
+        first_stop_count = sum(1 for call in control.calls if call[0] == "ptzstop")
+        ptz.stop()  # immediately after: within ttl, must not resend yet
+        self.assertEqual(sum(1 for call in control.calls if call[0] == "ptzstop"), first_stop_count)
+
+        time.sleep(0.06)
+        ptz.stop()  # past ttl: must retry even though the first attempt "failed"
+        self.assertGreater(sum(1 for call in control.calls if call[0] == "ptzstop"), first_stop_count)
 
     def test_velocity_ptz_aims_up_for_face_when_vertical_aim_is_high(self):
         opener = FakeOpener()

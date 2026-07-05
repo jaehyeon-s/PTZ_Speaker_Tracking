@@ -206,6 +206,61 @@ class TrackIdReIdentifier:
         self.reference = None
 
 
+class AppearanceGuard:
+    """Detect a tracker-id switch by periodically re-checking appearance.
+
+    TrackIdReIdentifier's score is binary (1.0/0.0 on the tracker id alone), so
+    once a multi-object tracker's id silently jumps to the wrong person after
+    an occlusion or a crossing, the system would keep reporting full
+    confidence in that stranger with no signal that anything went wrong.
+
+    This wraps a separate appearance matcher (e.g. AppearanceReIdentifier) and
+    re-checks the currently tracked crop against the appearance captured at
+    registration every ``verify_every_frames`` frames. ``mismatch_limit``
+    consecutive failed checks means the id likely switched to someone else,
+    at which point ``check`` starts returning False so the caller can force a
+    recovery instead of continuing to follow the id with full confidence.
+    """
+
+    def __init__(
+        self,
+        appearance_matcher,
+        verify_every_frames: int = 30,
+        mismatch_limit: int = 3,
+    ) -> None:
+        self.appearance_matcher = appearance_matcher
+        self.verify_every_frames = max(1, verify_every_frames)
+        self.mismatch_limit = max(1, mismatch_limit)
+        self._frame_count = 0
+        self._mismatch_streak = 0
+
+    def register(self, frame, bbox: BBox) -> None:
+        self.appearance_matcher.register(frame, bbox)
+        self._frame_count = 0
+        self._mismatch_streak = 0
+
+    def check(self, frame, bbox: BBox) -> bool:
+        """Return False once sustained appearance drift is confirmed.
+
+        Only actually compares appearance every ``verify_every_frames`` calls;
+        other frames pass through so this stays cheap on the hot path.
+        """
+        self._frame_count += 1
+        if self._frame_count % self.verify_every_frames != 0:
+            return True
+        score = self.appearance_matcher.score(frame, bbox)
+        if score >= self.appearance_matcher.threshold:
+            self._mismatch_streak = 0
+            return True
+        self._mismatch_streak += 1
+        return self._mismatch_streak < self.mismatch_limit
+
+    def reset(self) -> None:
+        self.appearance_matcher.reset()
+        self._frame_count = 0
+        self._mismatch_streak = 0
+
+
 def build_re_identifier(backend: str, threshold: float, model_path: str | None = None):
     if backend == "hsv":
         return AppearanceReIdentifier(threshold)

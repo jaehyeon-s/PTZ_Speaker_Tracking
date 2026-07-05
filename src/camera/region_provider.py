@@ -103,6 +103,7 @@ class IdentityMatchedRegionProvider:
         position_gate_ratio: float = 0.5,
         detect_during_bootstrap: bool = False,
         enable_center_mistrack: bool = True,
+        appearance_guard=None,
     ) -> None:
         self.detector = detector
         self.matcher = matcher
@@ -115,6 +116,11 @@ class IdentityMatchedRegionProvider:
         # matching. With an authoritative tracker id, being off-center is normal, so
         # disable it to avoid false PRESENTER_MISTRACK_CONFIRMED recoveries.
         self.enable_center_mistrack = enable_center_mistrack
+        # Optional src.reid.appearance.AppearanceGuard: a tracker id alone cannot
+        # notice an ID switch (its score stays 1.0 for whoever now holds the id),
+        # so this periodically cross-checks appearance and forces LOST on
+        # sustained drift instead of confidently following the wrong person.
+        self.appearance_guard = appearance_guard
         self.weak_min_score = weak_min_score
         self.identity_margin = identity_margin
         self.center_margin = center_margin
@@ -174,6 +180,31 @@ class IdentityMatchedRegionProvider:
 
         self.hold_count = 0
         self.last_trusted_bbox = best.bbox
+
+        if self.appearance_guard is not None and not self.appearance_guard.check(frame, best.bbox):
+            # The tracker id still scores full confidence, but sustained
+            # appearance drift means it most likely switched to someone else
+            # (occlusion/crossing). Force LOST so the existing HOLD->LOST->
+            # reregister recovery path takes over instead of silently
+            # following a stranger.
+            self.mismatch_count = 0
+            self.last_trusted_bbox = None
+            self.last_observation = IdentityObservation(
+                None,
+                "identity_lost",
+                TrackingState.LOST,
+                "APPEARANCE_DRIFT_CONFIRMED",
+                best_score,
+                center_score,
+                second_score,
+                identity_delta,
+                center_delta,
+                len(candidates),
+                self.hold_count,
+                self.mismatch_count,
+            )
+            return None, "identity_lost"
+
         if self.enable_center_mistrack and center_candidate is not None and best.bbox != center_candidate.bbox:
             away = _is_away_from_center(best.bbox, frame.shape, self.center_dead_zone_ratio)
             if away and center_delta >= self.center_margin:
@@ -300,10 +331,18 @@ class IdentityMatchedRegionProvider:
     def _has_reference(self) -> bool:
         return getattr(self.matcher, "reference", None) is not None
 
-    def reset_identity_state(self, bbox: BBox | None = None) -> None:
+    def reset_identity_state(self, bbox: BBox | None = None, frame=None) -> None:
         self.hold_count = 0
         self.mismatch_count = 0
         self.last_trusted_bbox = bbox
+        if self.appearance_guard is not None:
+            if bbox is not None and frame is not None:
+                # Capture a fresh appearance baseline at the same moment the
+                # id-matcher's reference changes, so the guard doesn't compare
+                # a re-registered presenter against a stale snapshot.
+                self.appearance_guard.register(frame, bbox)
+            else:
+                self.appearance_guard.reset()
 
 
 def _candidate_from_person(index: int, person: PersonDetection) -> Candidate:
