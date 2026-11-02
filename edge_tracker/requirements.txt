@@ -1,0 +1,4 @@
+numpy>=1.26.0,<2
+opencv-contrib-python>=4.9.0,<4.12
+# 8.4.174 loads yolo26n-reid.onnx as task 'reid' and rejects predict(); 8.4.60 is the verified version.
+ultralytics==8.4.60

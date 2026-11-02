@@ -1,0 +1,12 @@
+# Ultralytics ByteTrack settings for Raspberry Pi 5 and Qon simulator experiments.
+#
+# track_buffer is frame-based. 60 frames retains a lost track for roughly four
+# seconds at the observed 15 FPS simulator rate. The app still releases an
+# unconfirmed target after its shorter wall-clock grace period.
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 60
+match_thresh: 0.8
+fuse_score: True

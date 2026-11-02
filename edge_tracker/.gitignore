@@ -1,0 +1,24 @@
+.venv/
+marker_tracker/local_settings.py
+*.pt
+*.onnx
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.cache/
+
+logs.md
+aruco_diagnostics/
+test_assets/*.mp4
+test_video/raw/
+test_video/traces/
+test_video/logs/
+test_video/unity_metrics/
+test_video/scenario_results/
+
+# 로컬 전용 카메라 접속 정보 / 복붙용 명령어 (절대 커밋 금지)
+local_env.sh
+LOCAL_COMMANDS.md
+
+*.log
