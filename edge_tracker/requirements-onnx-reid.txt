@@ -1,0 +1,5 @@
+# Install after requirements.txt for speaker ReID from an ONNX file on the CPU
+# (--speaker-reid-model yolo26n-reid.onnx or --speaker-reid-onnx).
+# Not needed when ReID runs on the NPU with --speaker-reid-hef.
+onnx>=1.17,<2
+onnxruntime>=1.20,<2

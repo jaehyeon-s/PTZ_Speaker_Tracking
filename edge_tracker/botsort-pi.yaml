@@ -1,0 +1,18 @@
+# BoT-SORT comparison profile for Raspberry Pi 5 and Qon PTZ experiments.
+#
+# Shared thresholds intentionally match bytetrack-pi.yaml so the comparison
+# isolates BoT-SORT's Kalman state and sparse optical-flow camera-motion
+# compensation. ReID remains disabled for this first measurement stage.
+tracker_type: botsort
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 60
+match_thresh: 0.8
+fuse_score: True
+
+gmc_method: sparseOptFlow
+proximity_thresh: 0.5
+appearance_thresh: 0.8
+with_reid: False
+model: auto

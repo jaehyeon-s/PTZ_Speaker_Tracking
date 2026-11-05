@@ -1,0 +1,3 @@
+# This computer only (not the Pi), after requirements-onnx-reid.txt: runs --speaker-reid-onnx on the GPU
+# (--speaker-reid-device cuda) by converting the ONNX to PyTorch.
+onnx2torch==1.5.15

@@ -1,0 +1,11 @@
+# Ultralytics ByteTrack settings for this PTZ prototype.
+#
+# track_buffer is frame-based. With the observed 23-25 FPS desktop test rate,
+# 75 frames keeps a lost track alive for roughly 3 seconds.
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 75
+match_thresh: 0.8
+fuse_score: True
